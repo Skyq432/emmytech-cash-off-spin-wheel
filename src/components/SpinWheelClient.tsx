@@ -18,6 +18,18 @@ const CX = SIZE / 2;
 const CY = SIZE / 2;
 const R = SIZE / 2 - 15;
 
+const FALLBACK_WHEEL_ITEMS = [
+  { id: "aedb9f84-fc2c-4b52-b3d3-93f40e956916", label: "₦100", prize_type: "cash", monetary_value: 100 },
+  { id: "491c8dd5-8f98-4346-91a0-4d96e949c5ed", label: "₦200", prize_type: "cash", monetary_value: 200 },
+  { id: "58d84604-6dc3-47ea-bfd9-ad648f696c6f", label: "₦500", prize_type: "cash", monetary_value: 500 },
+  { id: "43215977-3b85-48f6-b489-ff29cbc9b308", label: "₦1,000", prize_type: "cash", monetary_value: 1000 },
+  { id: "f5a07662-477f-422d-a9ab-11619687a3f8", label: "₦2,000", prize_type: "cash", monetary_value: 2000 },
+  { id: "cbbe754e-7fdb-4de8-b882-b122930f831e", label: "Laptop", prize_type: "prize", monetary_value: 0 },
+  { id: "3d17d40e-490d-475a-9699-d2a528c53b39", label: "Try Again", prize_type: "retry", monetary_value: 0 },
+  { id: "e2d0bde9-5753-4989-96c6-84a0990ebbae", label: "Bonus Spin", prize_type: "bonus_spin", monetary_value: 0 },
+  { id: "1ef0fe2d-8c2e-4474-9a27-04e1920d064d", label: "EM", prize_type: "letter", monetary_value: 0 },
+] satisfies WheelItem[];
+
 type WheelItem = {
   id: string;
   label: string;
@@ -171,7 +183,7 @@ export default function SpinWheelClient() {
   const lastTickIdxRef = useRef(-1);
   const angleRef = useRef(0);
 
-  const [wheelItems, setWheelItems] = useState<WheelItem[]>([]);
+  const [wheelItems, setWheelItems] = useState<WheelItem[]>(FALLBACK_WHEEL_ITEMS);
   const [player, setPlayer] = useState<SpinPlayer | null>(null);
   const [prizeBag, setPrizeBag] = useState<PrizeBagItem[]>([]);
   const [cashOffAccount, setCashOffAccount] = useState<CashOffAccount | null>(null);
@@ -247,13 +259,17 @@ export default function SpinWheelClient() {
       localStorage.setItem("emmy_ref", refCode);
     }
 
-    await loadBootstrap();
-    if (handoffToken) {
-      await consumeWebsiteHandoff(handoffToken);
-    }
-    await loadSavedPlayer();
-
     setLoading(false);
+    void loadBootstrap();
+
+    try {
+      if (handoffToken) {
+        await consumeWebsiteHandoff(handoffToken);
+      }
+      await loadSavedPlayer();
+    } catch (error) {
+      console.error("Player restore error:", error);
+    }
   }
 
   async function consumeWebsiteHandoff(handoffToken: string) {
