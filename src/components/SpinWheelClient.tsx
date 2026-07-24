@@ -85,8 +85,27 @@ type CashOffAccount = {
   updated_at: string | null;
 };
 
+type CashChallenge = {
+  id?: string | null;
+  active?: boolean;
+  status?: string | null;
+  cash_balance?: number | string | null;
+  cash_target?: number | string | null;
+  conversion_floor?: number | string | null;
+  expires_at?: string | null;
+  cash_eligible?: boolean;
+  converted_to_cash_off?: boolean;
+  converted_cash_off_amount?: number | string | null;
+};
+
 function moneyFmt(amount: number | string | null | undefined) {
   return "\u20A6" + Number(amount || 0).toLocaleString();
+}
+
+function countdownText(expiresAt: string | null | undefined, now: number) {
+  const remaining = Math.max(0, Math.floor((new Date(expiresAt || 0).getTime() - now) / 1000));
+  const values = [Math.floor(remaining / 3600), Math.floor((remaining % 3600) / 60), remaining % 60];
+  return values.map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 function cleanDisplayText(value: string | null | undefined) {
@@ -156,6 +175,9 @@ export default function SpinWheelClient() {
   const [player, setPlayer] = useState<SpinPlayer | null>(null);
   const [prizeBag, setPrizeBag] = useState<PrizeBagItem[]>([]);
   const [cashOffAccount, setCashOffAccount] = useState<CashOffAccount | null>(null);
+  const [cashChallenge, setCashChallenge] = useState<CashChallenge | null>(null);
+  const [timerPreview, setTimerPreview] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [spinning, setSpinning] = useState(false);
 
@@ -172,6 +194,16 @@ export default function SpinWheelClient() {
     const preview = new URLSearchParams(window.location.search).get("preview");
     if (preview === "no-spins") {
       setShowOutOfSpins(true);
+    }
+    if (preview === "cash-timer") {
+      setTimerPreview(true);
+      setCashChallenge({
+        active: true,
+        cash_balance: 500,
+        cash_target: 1000,
+        conversion_floor: 700,
+        expires_at: new Date(Date.now() + 23 * 60 * 60 * 1000 + 47 * 60 * 1000).toISOString(),
+      });
     }
   }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -198,21 +230,52 @@ export default function SpinWheelClient() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     drawWheel(angleRef.current);
   }, [wheelItems]);
 
   async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const refCode = urlParams.get("ref");
+    const handoffToken = urlParams.get("handoff");
 
     if (refCode) {
       localStorage.setItem("emmy_ref", refCode);
     }
 
     await loadBootstrap();
+    if (handoffToken) {
+      await consumeWebsiteHandoff(handoffToken);
+    }
     await loadSavedPlayer();
 
     setLoading(false);
+  }
+
+  async function consumeWebsiteHandoff(handoffToken: string) {
+    try {
+      const res = await fetch("/api/spin/handoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handoffToken }),
+      });
+      const data = await res.json();
+
+      if (!data.ok || !data.spin_player?.id) return;
+
+      localStorage.setItem("emmy_spin_player_id", data.spin_player.id);
+      if (data.wheel_session_token) {
+        localStorage.setItem("emmy_wheel_session_token", data.wheel_session_token);
+      }
+
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (error) {
+      console.error("Website handoff error:", error);
+    }
   }
 
   async function loadBootstrap() {
@@ -240,6 +303,7 @@ export default function SpinWheelClient() {
         setPlayer(data.spinPlayer);
         setPrizeBag(data.prizes || []);
         setCashOffAccount(data.cashOffAccount || null);
+        setCashChallenge(data.cashChallenge || null);
       } else {
         localStorage.removeItem("emmy_spin_player_id");
       }
@@ -259,6 +323,7 @@ export default function SpinWheelClient() {
       setPlayer(data.spinPlayer);
       setPrizeBag(data.prizes || []);
       setCashOffAccount(data.cashOffAccount || null);
+      setCashChallenge(data.cashChallenge || null);
     }
   }
 
@@ -584,6 +649,7 @@ export default function SpinWheelClient() {
 
       animateToWinner(winnerIndex, async () => {
         setPlayer(data.spinPlayer);
+        setCashChallenge(data.cash_challenge || null);
 
         setCashOffAccount((current) => ({
           exists: true,
@@ -920,6 +986,33 @@ export default function SpinWheelClient() {
             </h1>
           </div>
         </section>
+
+        {(player || timerPreview) && cashChallenge && (
+          <section className="cash-challenge-strip" aria-label="24-hour withdrawable cash challenge">
+            <div className="cash-challenge-clock" aria-hidden="true">
+              <i className="far fa-clock" />
+            </div>
+            <div className="cash-challenge-time">
+              <span>Withdrawable cash</span>
+              <strong>{cashChallenge.active ? countdownText(cashChallenge.expires_at, clockNow) : "24:00:00"}</strong>
+            </div>
+            <div className="cash-challenge-progress">
+              <span>
+                {cashChallenge.cash_eligible
+                  ? "Ready to withdraw"
+                  : cashChallenge.converted_to_cash_off
+                    ? "Converted to Cash-Off"
+                    : `${moneyFmt(Math.max(0, Number(cashChallenge.cash_target || 1000) - Number(cashChallenge.cash_balance || 0)))} to eligibility`}
+              </span>
+              <div><i style={{ width: `${Math.min(100, Math.round((Number(cashChallenge.cash_balance || 0) / Math.max(1, Number(cashChallenge.cash_target || 1000))) * 100))}%` }} /></div>
+            </div>
+            <div className="cash-challenge-amount">
+              <span>Cash</span>
+              <strong>{moneyFmt(cashChallenge.cash_balance)}</strong>
+              <small>₦700–₦999 converts</small>
+            </div>
+          </section>
+        )}
 
         <div className="w-full max-w-lg text-center">
           <div className="wheel-outer mb-12">

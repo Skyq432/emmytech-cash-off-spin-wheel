@@ -3525,3 +3525,129 @@ body {
     overflow: visible;
   }
 }
+
+/* Compact 24-hour cash challenge */
+.cash-challenge-strip {
+  width: min(100%, 640px);
+  margin: 0 auto 24px;
+  display: grid;
+  grid-template-columns: 42px auto minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid rgba(251, 176, 59, 0.42);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #002b84 0%, #064fc4 100%);
+  color: #fff;
+  box-shadow: 0 14px 34px rgba(0, 51, 153, 0.18);
+}
+
+.cash-challenge-clock {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #fbb03b;
+  color: #002b84;
+  font-size: 17px;
+}
+
+.cash-challenge-time,
+.cash-challenge-amount {
+  display: grid;
+  gap: 2px;
+}
+
+.cash-challenge-time span,
+.cash-challenge-amount span,
+.cash-challenge-amount small,
+.cash-challenge-progress > span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.cash-challenge-time strong,
+.cash-challenge-amount strong {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-challenge-progress {
+  min-width: 0;
+}
+
+.cash-challenge-progress > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #ffd994;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cash-challenge-progress > div {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cash-challenge-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fbb03b;
+  transition: width 300ms ease;
+}
+
+.cash-challenge-amount {
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: right;
+}
+
+.cash-challenge-amount small {
+  margin-top: 2px;
+  font-size: 8px;
+  color: #ffd994;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .cash-challenge-strip {
+    grid-template-columns: 38px 1fr auto;
+    gap: 10px 12px;
+    margin-bottom: 18px;
+    padding: 11px 12px;
+    border-radius: 16px;
+  }
+
+  .cash-challenge-clock {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .cash-challenge-time strong,
+  .cash-challenge-amount strong {
+    font-size: 16px;
+  }
+
+  .cash-challenge-progress {
+    grid-column: 1 / -1;
+  }
+
+  .cash-challenge-amount {
+    padding-left: 10px;
+  }
+
+  .cash-challenge-amount small {
+    display: none;
+  }
+}

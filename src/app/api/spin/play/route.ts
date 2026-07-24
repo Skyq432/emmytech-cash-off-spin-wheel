@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data, error } = await supabaseAdmin.rpc(
-      "complete_cash_off_spin",
+      "complete_cash_challenge_spin",
       {
         p_spin_player_id: player.id,
         p_rule_item_id: winner.id,
