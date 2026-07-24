@@ -279,15 +279,20 @@ export default function SpinWheelClient() {
   }
 
   async function loadBootstrap() {
-    try {
-      const res = await fetch("/api/spin/bootstrap");
-      const data = await res.json();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const res = await fetch("/api/spin/bootstrap", { cache: "no-store" });
+        const data = await res.json();
 
-      if (data.ok) {
-        setWheelItems(data.wheelItems || []);
+        if (data.ok && data.wheelItems?.length) {
+          setWheelItems(data.wheelItems);
+          return;
+        }
+      } catch (error) {
+        console.error("Bootstrap error:", error);
       }
-    } catch (error) {
-      console.error("Bootstrap error:", error);
+
+      await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
     }
   }
 
