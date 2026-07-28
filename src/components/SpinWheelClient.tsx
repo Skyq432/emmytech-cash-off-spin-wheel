@@ -5,12 +5,17 @@ import { useEffect, useRef, useState } from "react";
 const LOGO_URL =
   "https://ouvdainkxpaegczdinlp.supabase.co/storage/v1/object/public/assest/emmytech%20logo%202.png";
 
-const COLORS = ["#003399", "#fbb03b", "#ffffff"];
-const TEXT_COLORS: Record<string, string> = {
-  "#003399": "#ffffff",
-  "#fbb03b": "#000000",
-  "#ffffff": "#003399",
-};
+const SEGMENT_COLORS = [
+  { fill: "#003399", text: "#ffffff", accent: "#1a5cff" },
+  { fill: "#fbb03b", text: "#1a0e00", accent: "#ffd06b" },
+  { fill: "#ffffff", text: "#003399", accent: "#e8efff" },
+  { fill: "#0a5bd8", text: "#ffffff", accent: "#3d7eff" },
+  { fill: "#ff9500", text: "#1a0e00", accent: "#ffb84d" },
+  { fill: "#f0f4ff", text: "#003399", accent: "#ffffff" },
+  { fill: "#001f66", text: "#ffffff", accent: "#1a3d99" },
+  { fill: "#ffc940", text: "#1a0e00", accent: "#ffe07a" },
+  { fill: "#e8efff", text: "#003399", accent: "#f0f4ff" },
+];
 
 const LETTER_SEGMENTS = ["EM", "MY", "TE", "CH", "NO", "LO", "GY"];
 const SIZE = 800;
@@ -56,6 +61,8 @@ type SpinPlayer = {
   cashout_eligible?: boolean | null;
   dm_bonus_claimed?: boolean | null;
   total_referrals_count?: number | null;
+  daily_spin_available?: boolean | null;
+  last_daily_spin_granted_on?: string | null;
 };
 
 type SpinResult = {
@@ -110,6 +117,12 @@ type CashChallenge = {
   converted_cash_off_amount?: number | string | null;
 };
 
+type ReferrerInfo = {
+  name: string;
+  prize: string | null;
+  prize_type: string | null;
+};
+
 function moneyFmt(amount: number | string | null | undefined) {
   return "\u20A6" + Number(amount || 0).toLocaleString();
 }
@@ -132,54 +145,48 @@ function cleanDisplayText(value: string | null | undefined) {
 }
 
 function normalizeLabel(value: string | null | undefined) {
-  return cleanDisplayText(value).toLowerCase()
-    .replace(/[â‚¦,\s]/g, "")
+  return cleanDisplayText(value)
+    .toLowerCase()
+    .replace(/[₦,\s]/g, "")
     .trim();
+}
+
+function referralHeadline(referrer: ReferrerInfo) {
+  const prize = cleanDisplayText(referrer.prize).trim();
+
+  switch (referrer.prize_type) {
+    case "cash":
+    case "prize":
+      return prize
+        ? `${referrer.name} just won ${prize}!`
+        : `${referrer.name} invited you to spin!`;
+    case "letter":
+      return prize
+        ? `${referrer.name} unlocked ${prize}!`
+        : `${referrer.name} is collecting EmmyTech letters!`;
+    case "bonus":
+    case "bonus_spin":
+      return `${referrer.name} earned a bonus spin!`;
+    case "retry":
+      return `${referrer.name} invited you to spin the EmmyTech wheel!`;
+    default:
+      return prize
+        ? `${referrer.name} just landed on ${prize}!`
+        : `${referrer.name} invited you to spin!`;
+  }
 }
 
 function getUnlockedLetters(player: SpinPlayer | null) {
   return Array.isArray(player?.letters_unlocked) ? player.letters_unlocked : [];
 }
 
-function getCashoutDisplay(player: SpinPlayer | null) {
-  const balance = Number(player?.wallet_balance || 0);
-  const step = Math.max(1, Number(player?.cashout_target || 1000));
-  const nextTarget = Math.max(step, (Math.floor(balance / step) + 1) * step);
-  const percent = nextTarget > 0 ? Math.min(100, Math.round((balance / nextTarget) * 100)) : 0;
-  const cashoutAvailable = balance >= step;
-  const nextLeft = Math.max(0, nextTarget - balance);
-
-  return {
-    balance,
-    step,
-    nextTarget,
-    percent,
-    cashoutAvailable,
-    nextLeft,
-  };
-}
-
-function getCashoutMotivation(player: SpinPlayer | null) {
-  const display = getCashoutDisplay(player);
-
-  if (!player) return "Register and spin to start your cashout journey.";
-  if (display.balance <= 0) return "Spin now. Your first win starts the journey.";
-
-  if (!display.cashoutAvailable) {
-    const left = Math.max(0, display.step - display.balance);
-    return moneyFmt(left) + " remaining - you are " + display.percent + "% there";
-  }
-
-  if (display.nextLeft <= 0) {
-    return "Cashout ready. Keep spinning to unlock the next level.";
-  }
-
-  return "Cashout ready - " + moneyFmt(display.nextLeft) + " to " + moneyFmt(display.nextTarget);
+function haptic(style: "light" | "medium" | "heavy" = "medium") {
+  if (typeof navigator === "undefined" || !("vibrate" in navigator)) return;
+  navigator.vibrate(style === "light" ? 8 : style === "medium" ? 15 : 30);
 }
 
 export default function SpinWheelClient() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const hubRef = useRef<HTMLDivElement | null>(null);
   const lastTickIdxRef = useRef(-1);
   const angleRef = useRef(0);
 
@@ -188,9 +195,16 @@ export default function SpinWheelClient() {
   const [prizeBag, setPrizeBag] = useState<PrizeBagItem[]>([]);
   const [cashOffAccount, setCashOffAccount] = useState<CashOffAccount | null>(null);
   const [cashChallenge, setCashChallenge] = useState<CashChallenge | null>(null);
+  const [referrer, setReferrer] = useState<ReferrerInfo | null>(null);
+  const [stats, setStats] = useState({ totalPlayers: 0, totalCashWon: 0 });
+  const [dailyAvailable, setDailyAvailable] = useState(false);
+  const [nextDailyAt, setNextDailyAt] = useState<string | null>(null);
+  const [guestResult, setGuestResult] = useState<SpinResult | null>(null);
+  const [shareBonusClaimedFor, setShareBonusClaimedFor] = useState<string | null>(null);
+  const [claimingShareBonus, setClaimingShareBonus] = useState(false);
+  const [playerRestoreComplete, setPlayerRestoreComplete] = useState(false);
   const [timerPreview, setTimerPreview] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
-  const [loading, setLoading] = useState(true);
   const [spinning, setSpinning] = useState(false);
 
   const [showRegister, setShowRegister] = useState(false);
@@ -204,19 +218,23 @@ export default function SpinWheelClient() {
   // CASH OFF NO-SPINS PREVIEW V2
   useEffect(() => {
     const preview = new URLSearchParams(window.location.search).get("preview");
-    if (preview === "no-spins") {
-      setShowOutOfSpins(true);
-    }
-    if (preview === "cash-timer") {
-      setTimerPreview(true);
-      setCashChallenge({
-        active: true,
-        cash_balance: 500,
-        cash_target: 1000,
-        conversion_floor: 700,
-        expires_at: new Date(Date.now() + 23 * 60 * 60 * 1000 + 47 * 60 * 1000).toISOString(),
-      });
-    }
+    const previewTimer = window.setTimeout(() => {
+      if (preview === "no-spins") {
+        setShowOutOfSpins(true);
+      }
+      if (preview === "cash-timer") {
+        setTimerPreview(true);
+        setCashChallenge({
+          active: true,
+          cash_balance: 500,
+          cash_target: 1000,
+          conversion_floor: 700,
+          expires_at: new Date(Date.now() + 23 * 60 * 60 * 1000 + 47 * 60 * 1000).toISOString(),
+        });
+      }
+    }, 0);
+
+    return () => window.clearTimeout(previewTimer);
   }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -231,7 +249,6 @@ export default function SpinWheelClient() {
     email: "",
   });
 
-  const cashout = getCashoutDisplay(player);
   const unlockedLetters = getUnlockedLetters(player);
   const cashOffBalance = Number(cashOffAccount?.balance || 0);
   const totalCashOffEarned = Number(cashOffAccount?.total_credited || 0);
@@ -259,8 +276,13 @@ export default function SpinWheelClient() {
       localStorage.setItem("emmy_ref", refCode);
     }
 
-    setLoading(false);
+    const activeRefCode = refCode || localStorage.getItem("emmy_ref");
+    if (activeRefCode) {
+      void loadReferrer(activeRefCode);
+    }
+
     void loadBootstrap();
+    void loadStats();
 
     try {
       if (handoffToken) {
@@ -269,6 +291,43 @@ export default function SpinWheelClient() {
       await loadSavedPlayer();
     } catch (error) {
       console.error("Player restore error:", error);
+    } finally {
+      setPlayerRestoreComplete(true);
+    }
+  }
+
+  async function loadReferrer(referralCode: string) {
+    const code = referralCode.trim();
+    if (!/^[a-z0-9]{5,20}$/i.test(code)) return;
+
+    try {
+      const res = await fetch(
+        `/api/spin/referrer?code=${encodeURIComponent(code)}`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+
+      if (data.ok && data.referrer) {
+        setReferrer(data.referrer);
+      }
+    } catch {
+      // Referral personalization is optional; the wheel still works without it.
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch("/api/spin/stats");
+      const data = await res.json();
+
+      if (data.ok) {
+        setStats({
+          totalPlayers: Number(data.totalPlayers || 0),
+          totalCashWon: Number(data.totalCashWon || 0),
+        });
+      }
+    } catch {
+      // Social proof falls back to truthful static copy if stats are unavailable.
     }
   }
 
@@ -325,6 +384,7 @@ export default function SpinWheelClient() {
         setPrizeBag(data.prizes || []);
         setCashOffAccount(data.cashOffAccount || null);
         setCashChallenge(data.cashChallenge || null);
+        await refreshDailySpin(data.spinPlayer.id);
       } else {
         localStorage.removeItem("emmy_spin_player_id");
       }
@@ -346,6 +406,64 @@ export default function SpinWheelClient() {
       setCashOffAccount(data.cashOffAccount || null);
       setCashChallenge(data.cashChallenge || null);
     }
+  }
+
+  async function refreshDailySpin(spinPlayerId: string) {
+    try {
+      const res = await fetch("/api/spin/daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spinPlayerId }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) return;
+
+      setDailyAvailable(Boolean(data.dailyAvailable));
+      setNextDailyAt(data.nextDailyAt || null);
+      setPlayer((current) =>
+        current && current.id === spinPlayerId
+          ? {
+              ...current,
+              spins_remaining: Number(data.spinsRemaining || 0),
+              daily_spin_available: Boolean(data.dailyAvailable),
+              last_daily_spin_granted_on:
+                data.lastDailySpinGrantedOn || null,
+            }
+          : current
+      );
+    } catch (error) {
+      console.error("Daily spin refresh error:", error);
+    }
+  }
+
+  function getOrCreateVisitorId() {
+    const saved = localStorage.getItem("emmy_spin_visitor_id");
+    if (saved) return saved;
+
+    const visitorId = `wheel:${crypto.randomUUID()}`;
+    localStorage.setItem("emmy_spin_visitor_id", visitorId);
+    return visitorId;
+  }
+
+  async function createGuestSession() {
+    const visitorId = getOrCreateVisitorId();
+    const referralCode =
+      new URLSearchParams(window.location.search).get("ref") ||
+      localStorage.getItem("emmy_ref");
+    const res = await fetch("/api/spin/guest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorId, referralCode }),
+    });
+    const data = await res.json();
+
+    if (!data.ok || !data.wheelSessionToken) {
+      throw new Error(data.error || "Unable to start your free spin.");
+    }
+
+    localStorage.setItem("emmy_wheel_session_token", data.wheelSessionToken);
+    return data.wheelSessionToken as string;
   }
 
   function drawWheel(currentAngle: number) {
@@ -370,35 +488,168 @@ export default function SpinWheelClient() {
 
     const arc = (2 * Math.PI) / wheelItems.length;
 
+    // A soft edge shadow gives the level wheel depth without tilting its face.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CX, CY, R + 10, 0, Math.PI * 2);
+    const wheelShadow = ctx.createRadialGradient(CX, CY, R - 5, CX, CY, R + 12);
+    wheelShadow.addColorStop(0, "rgba(0, 20, 60, 0.15)");
+    wheelShadow.addColorStop(1, "rgba(0, 20, 60, 0)");
+    ctx.fillStyle = wheelShadow;
+    ctx.fill();
+    ctx.restore();
+
     wheelItems.forEach((item, i) => {
-      const color = COLORS[i % COLORS.length];
+      const color = SEGMENT_COLORS[i % SEGMENT_COLORS.length];
       const start = currentAngle + i * arc;
 
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(CX, CY);
       ctx.arc(CX, CY, R, start, start + arc);
-      ctx.fillStyle = color;
+      ctx.closePath();
+
+      const gradient = ctx.createRadialGradient(CX, CY, 0, CX, CY, R);
+      gradient.addColorStop(0, color.accent);
+      gradient.addColorStop(0.4, color.fill);
+      gradient.addColorStop(1, color.fill);
+      ctx.fillStyle = gradient;
       ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(CX, CY);
+      ctx.arc(CX, CY, R, start, start + arc);
+      ctx.closePath();
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(CX, CY);
+      ctx.arc(CX, CY, R, start, start + arc);
+      ctx.closePath();
+      ctx.clip();
+
+      const highlight = ctx.createRadialGradient(
+        CX - R * 0.35,
+        CY - R * 0.35,
+        0,
+        CX,
+        CY,
+        R
+      );
+      highlight.addColorStop(0, "rgba(255,255,255,0.22)");
+      highlight.addColorStop(0.5, "rgba(255,255,255,0.05)");
+      highlight.addColorStop(1, "rgba(0,0,0,0.1)");
+      ctx.fillStyle = highlight;
+      ctx.fill();
+      ctx.restore();
 
       ctx.save();
       ctx.translate(CX, CY);
       ctx.rotate(start + arc / 2);
-      ctx.fillStyle = TEXT_COLORS[color] || "#000";
-      ctx.font = "800 22px 'Plus Jakarta Sans', Arial";
+      ctx.fillStyle = color.text;
+      ctx.font = '800 22px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
+      ctx.shadowColor = "rgba(0,0,0,0.2)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 2;
 
       const label = cleanDisplayText(item.label).toUpperCase();
-      ctx.fillText(label.length > 18 ? `${label.slice(0, 17)}â€¦` : label, R - 40, 0);
+      ctx.fillText(label.length > 18 ? `${label.slice(0, 17)}…` : label, R - 40, 0);
 
       ctx.restore();
     });
 
+    // A dark outer edge and multi-tone ring form the wheel's beveled rim.
+    ctx.beginPath();
+    ctx.arc(CX, CY, R + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = "#001a4d";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const rimGradient = ctx.createLinearGradient(0, 0, SIZE, SIZE);
+    rimGradient.addColorStop(0, "#003399");
+    rimGradient.addColorStop(0.25, "#3366cc");
+    rimGradient.addColorStop(0.5, "#1a5cff");
+    rimGradient.addColorStop(0.75, "#003399");
+    rimGradient.addColorStop(1, "#001f66");
+
     ctx.beginPath();
     ctx.arc(CX, CY, R, 0, Math.PI * 2);
-    ctx.strokeStyle = "#003399";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = rimGradient;
+    ctx.lineWidth = 6;
     ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(CX, CY, R - 4, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const rimDots = wheelItems.length * 3;
+    for (let dot = 0; dot < rimDots; dot += 1) {
+      const dotAngle = currentAngle + (dot / rimDots) * Math.PI * 2;
+      const dotX = CX + (R + 1) * Math.cos(dotAngle);
+      const dotY = CY + (R + 1) * Math.sin(dotAngle);
+
+      ctx.beginPath();
+      ctx.arc(dotX + 0.5, dotY + 0.5, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = dot % 2 === 0 ? "#fbb03b" : "#ffffff";
+      ctx.fill();
+    }
+
+    // The layered hub is part of the same canvas, so it stays visually aligned.
+    const hubRadius = 32;
+    ctx.beginPath();
+    ctx.arc(CX, CY, hubRadius + 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#001a4d";
+    ctx.fill();
+
+    const hubBase = ctx.createRadialGradient(CX - 8, CY - 8, 0, CX, CY, hubRadius);
+    hubBase.addColorStop(0, "#ffffff");
+    hubBase.addColorStop(0.6, "#e8efff");
+    hubBase.addColorStop(1, "#c7d2fe");
+    ctx.beginPath();
+    ctx.arc(CX, CY, hubRadius, 0, Math.PI * 2);
+    ctx.fillStyle = hubBase;
+    ctx.fill();
+    ctx.strokeStyle = "#003399";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const innerHubRadius = 18;
+    const innerHub = ctx.createRadialGradient(CX - 4, CY - 4, 0, CX, CY, innerHubRadius);
+    innerHub.addColorStop(0, "#1a5cff");
+    innerHub.addColorStop(1, "#001f66");
+    ctx.beginPath();
+    ctx.arc(CX, CY, innerHubRadius, 0, Math.PI * 2);
+    ctx.fillStyle = innerHub;
+    ctx.fill();
+
+    const centerDotRadius = 7;
+    const centerDot = ctx.createRadialGradient(CX - 2, CY - 2, 0, CX, CY, centerDotRadius);
+    centerDot.addColorStop(0, "#ffd06b");
+    centerDot.addColorStop(1, "#e08f00");
+    ctx.beginPath();
+    ctx.arc(CX, CY, centerDotRadius, 0, Math.PI * 2);
+    ctx.fillStyle = centerDot;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(CX - 2, CY - 2, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fill();
   }
 
   function getWinnerIndex(result: SpinResult) {
@@ -477,17 +728,13 @@ export default function SpinWheelClient() {
 
       if (currentIdxAtTop !== lastTickIdxRef.current) {
         lastTickIdxRef.current = currentIdxAtTop;
-
-        if (hubRef.current) {
-          hubRef.current.classList.remove("ticking");
-          void hubRef.current.offsetWidth;
-          hubRef.current.classList.add("ticking");
-        }
+        haptic("light");
       }
 
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
+        haptic("heavy");
         done();
       }
     }
@@ -536,7 +783,12 @@ export default function SpinWheelClient() {
 
   function requestAccess() {
     if (!player) {
-      setShowRegister(true);
+      if (guestResult) {
+        setShowRegister(true);
+        return;
+      }
+
+      void performSpin();
       return;
     }
 
@@ -558,11 +810,21 @@ export default function SpinWheelClient() {
       const referralCode =
         new URLSearchParams(window.location.search).get("ref") ||
         localStorage.getItem("emmy_ref");
+      const visitorId = guestResult ? getOrCreateVisitorId() : null;
+      const wheelSessionToken = guestResult
+        ? localStorage.getItem("emmy_wheel_session_token")
+        : null;
+      const claimedGuestResult = guestResult;
 
       const res = await fetch("/api/spin/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, referralCode }),
+        body: JSON.stringify({
+          ...form,
+          referralCode,
+          visitorId,
+          wheelSessionToken,
+        }),
       });
 
       const data = await res.json();
@@ -573,10 +835,21 @@ export default function SpinWheelClient() {
       }
 
       localStorage.setItem("emmy_spin_player_id", data.spinPlayer.id);
+      if (data.wheelSessionToken) {
+        localStorage.setItem("emmy_wheel_session_token", data.wheelSessionToken);
+      }
       setPlayer(data.spinPlayer);
+      setGuestResult(null);
       setShowRegister(false);
       setDrawerOpen(false);
       await refreshPlayer(data.spinPlayer.id);
+      await refreshDailySpin(data.spinPlayer.id);
+
+      if (claimedGuestResult) {
+        setLastResult(claimedGuestResult);
+        setShowResult(true);
+        showWinToast(data.spinPlayer.full_name || "You", claimedGuestResult.label);
+      }
     } catch (error) {
       console.error(error);
       setRegError("Network error. Please try again.");
@@ -586,10 +859,14 @@ export default function SpinWheelClient() {
   }
 
   async function performSpin() {
-    if (!player || spinning || !wheelItems.length) return;
+    if (spinning || !wheelItems.length) return;
+
+    const activePlayer = player;
+    const isGuestSpin = !activePlayer;
 
     setSpinning(true);
     setLastResult(null);
+    haptic("medium");
 
     let warmSpinActive = true;
     let lastFrameTime = performance.now();
@@ -610,12 +887,16 @@ export default function SpinWheelClient() {
 
     try {
       const requestId = crypto.randomUUID();
+      const wheelSessionToken = isGuestSpin
+        ? await createGuestSession()
+        : null;
 
       const res = await fetch("/api/spin/play", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          spinPlayerId: player.id,
+          spinPlayerId: activePlayer?.id || null,
+          wheelSessionToken,
           requestId,
         }),
       });
@@ -669,14 +950,31 @@ export default function SpinWheelClient() {
       warmSpinActive = false;
 
       animateToWinner(winnerIndex, async () => {
+        if (isGuestSpin) {
+          setGuestResult(result);
+          setLastResult(result);
+          setShowRegister(true);
+          setDrawerOpen(false);
+          setSpinning(false);
+          showWinToast("You", result.label);
+
+          if (result.result_type !== "retry") {
+            launchConfetti();
+          }
+
+          return;
+        }
+
         setPlayer(data.spinPlayer);
         setCashChallenge(data.cash_challenge || null);
+        setDailyAvailable(Boolean(data.daily?.daily_available));
+        setNextDailyAt(data.daily?.next_daily_at || null);
 
         setCashOffAccount((current) => ({
           exists: true,
           identity_id:
             current?.identity_id ||
-            player.identity_id ||
+            activePlayer?.identity_id ||
             "",
           balance: result.cash_off_after,
           total_credited:
@@ -702,6 +1000,7 @@ export default function SpinWheelClient() {
         }
 
         await refreshPlayer(data.spinPlayer.id);
+        await refreshDailySpin(data.spinPlayer.id);
       });
     } catch (error) {
       warmSpinActive = false;
@@ -751,7 +1050,7 @@ export default function SpinWheelClient() {
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank");
   }
 
-  function useCashOffViaWhatsApp() {
+  function openCashOffViaWhatsApp() {
     if (!player) {
       setShowRegister(true);
       return;
@@ -774,7 +1073,7 @@ export default function SpinWheelClient() {
 
   function getShareLink() {
     if (!player) return "";
-    return `${window.location.origin}?ref=${player.referral_code}`;
+    return `${window.location.origin}/r/${player.referral_code}`;
   }
 
   function getShareCaption() {
@@ -873,10 +1172,10 @@ export default function SpinWheelClient() {
     await copyShareLink();
   }
 
-  async function shareToWhatsAppStatus() {
+  async function shareToWhatsAppStatus(): Promise<boolean> {
     if (!player) {
       setShowRegister(true);
-      return;
+      return false;
     }
 
     if (typeof navigator.share === "function") {
@@ -886,10 +1185,10 @@ export default function SpinWheelClient() {
           text: getShareCaption(),
           url: getShareLink(),
         });
-        return;
+        return true;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
-          return;
+          return false;
         }
       }
     }
@@ -906,12 +1205,69 @@ export default function SpinWheelClient() {
     window.setTimeout(() => {
       setShareCopied(false);
     }, 2200);
+
+    return true;
+  }
+
+  async function claimShareBonus() {
+    const spinLogId = lastResult?.spin_log_id;
+    if (!player || !spinLogId || claimingShareBonus) return;
+    if (shareBonusClaimedFor === spinLogId) return;
+
+    setClaimingShareBonus(true);
+
+    try {
+      const res = await fetch("/api/spin/share-bonus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spinPlayerId: player.id,
+          spinLogId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || "Unable to add the share bonus.");
+      }
+
+      setShareBonusClaimedFor(spinLogId);
+      setPlayer((current) =>
+        current
+          ? { ...current, spins_remaining: Number(data.spinsRemaining || 0) }
+          : current
+      );
+
+      if (data.granted) {
+        showWinToast("Bonus", "+1 spin for sharing");
+      }
+    } catch (error) {
+      console.error("Share bonus error:", error);
+    } finally {
+      setClaimingShareBonus(false);
+    }
+  }
+
+  async function shareStatusAndClaimBonus() {
+    const shared = await shareToWhatsAppStatus();
+    if (shared) await claimShareBonus();
+  }
+
+  function dailyCountdown() {
+    if (!nextDailyAt) return null;
+
+    const remaining = Math.max(
+      0,
+      Math.floor((new Date(nextDailyAt).getTime() - clockNow) / 1000)
+    );
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor((remaining % 3600) / 60);
+    return `${hours}h ${minutes}m`;
   }
 
   function buttonLabel() {
-    if (loading) return "CONNECTING...";
-    if (!player) return "✨ SPIN FOR CASH OFF";
     if (spinning) return "🎡 SPINNING...";
+    if (!player) return "✨ SPIN NOW — IT'S FREE";
     if (Number(player.spins_remaining || 0) <= 0) return "🚀 GET ANOTHER SPIN";
     return "✨ SPIN NOW • " + player.spins_remaining + " LEFT";
   }
@@ -928,7 +1284,7 @@ export default function SpinWheelClient() {
 
   return (
     <div className="cashoff-app-root flex min-h-screen flex-col">
-      <div className={`win-toast ${toast ? "show" : ""}`}>
+      <div className={`win-toast ${toast ? "show" : ""}`} aria-live="polite">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-600">
           <i className="fas fa-gift" />
         </div>
@@ -942,7 +1298,10 @@ export default function SpinWheelClient() {
         </div>
       </div>
 
-      <nav className="sticky top-0 z-50 border-b border-slate-100 bg-white p-4 md:p-6">
+      <nav
+        className="sticky top-0 z-50 border-b border-slate-100 bg-white p-4 md:p-6"
+        aria-label="EmmyTech Spin and Win"
+      >
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="brand-logo-wrap">
             <img src={LOGO_URL} alt="Emmy Technology" className="brand-logo-img" />
@@ -994,19 +1353,72 @@ export default function SpinWheelClient() {
         </div>
       </nav>
 
+      <div className="cashoff-trust-bar" aria-label="Campaign information">
+        <div>
+          <span className="cashoff-trust-dot" aria-hidden="true" />
+          <span><strong>Free spin</strong> for new players</span>
+          <span aria-hidden="true">•</span>
+          {stats.totalPlayers > 0 ? (
+            <span>
+              <strong>{stats.totalPlayers.toLocaleString()}</strong> players registered
+            </span>
+          ) : (
+            <span><strong>Real prizes</strong> to win</span>
+          )}
+          <span aria-hidden="true">•</span>
+          <span>Share for <strong>bonus spins</strong></span>
+        </div>
+      </div>
+
       <main className="flex flex-grow flex-col items-center justify-center px-6 py-10">
         <section className="cashoff-hero-shell">
           <div className="cashoff-hero-copy">
             <div className="cashoff-hero-badge">
               <span className="cashoff-hero-emoji">🎁</span>
-              <span>Tap the wheel. Win Cash Off.</span>
+              <span>Free spin • Win real cash</span>
             </div>
 
             <h1>
-              EmmyTech <span>Spin & Save</span>
+              Spin the wheel. <span>Win cash.</span>
             </h1>
           </div>
         </section>
+
+        {referrer && playerRestoreComplete && !player && (
+          <aside
+            className="cw-referral-banner"
+            aria-label={`Referral invitation from ${referrer.name}`}
+          >
+            <div className="cw-referral-icon" aria-hidden="true">🎉</div>
+            <div className="cw-referral-text">
+              <strong>{referralHeadline(referrer)}</strong>
+              <span>Spin now to win yours — it&apos;s free</span>
+            </div>
+          </aside>
+        )}
+
+        {player && dailyAvailable && (
+          <aside className="cw-daily-banner" role="status" aria-live="polite">
+            <div className="cw-daily-icon" aria-hidden="true">🎡</div>
+            <div className="cw-daily-text">
+              <strong>Your daily spin is ready!</strong>
+              <span>
+                You have {Number(player.spins_remaining || 0)} spin
+                {Number(player.spins_remaining || 0) === 1 ? "" : "s"} available
+              </span>
+            </div>
+          </aside>
+        )}
+
+        {player && !dailyAvailable && nextDailyAt && (
+          <aside className="cw-daily-banner cw-daily-countdown" role="status">
+            <div className="cw-daily-icon" aria-hidden="true">⏰</div>
+            <div className="cw-daily-text">
+              <strong>Next daily spin in {dailyCountdown()}</strong>
+              <span>Earned referral and share spins remain available.</span>
+            </div>
+          </aside>
+        )}
 
         {(player || timerPreview) && cashChallenge && (
           <section className="cash-challenge-strip" aria-label="24-hour withdrawable cash challenge">
@@ -1035,28 +1447,45 @@ export default function SpinWheelClient() {
           </section>
         )}
 
-        <div className="w-full max-w-lg text-center">
-          <div className="wheel-outer mb-12">
+        <div className="wheel-stage w-full max-w-lg text-center">
+          <div className={`wheel-outer mb-12 ${spinning ? "spinning" : ""}`}>
             <div className="pointer-3d">
               <svg width="40" height="50" viewBox="0 0 40 50">
+                <defs>
+                  <linearGradient id="wheel-pointer-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#ff6b6b" />
+                    <stop offset="50%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#b91c1c" />
+                  </linearGradient>
+                </defs>
                 <path
                   d="M20 50L0 15C0 6.7 6.7 0 15 0H25C33.3 0 40 6.7 40 15L20 50Z"
-                  fill="#ef4444"
+                  fill="url(#wheel-pointer-gradient)"
                 />
                 <circle cx="20" cy="15" r="5" fill="white" />
+                <circle cx="20" cy="15" r="2.25" fill="#ef4444" />
               </svg>
             </div>
 
-            <canvas ref={canvasRef} className="wheel-canvas" />
-
-            <div ref={hubRef} className="hub">
-              <div className="h-2 w-2 rounded-full bg-blue-700" />
-            </div>
+            <canvas
+              ref={canvasRef}
+              className="wheel-canvas"
+              onClick={requestAccess}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  requestAccess();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="Spin the EmmyTech prize wheel"
+            />
           </div>
 
           <button
             onClick={requestAccess}
-            disabled={loading || spinning}
+            disabled={spinning}
             className="cashoff-main-spin-button"
           >
             {buttonLabel()}
@@ -1076,7 +1505,7 @@ export default function SpinWheelClient() {
 
                 <button
                   type="button"
-                  onClick={useCashOffViaWhatsApp}
+                  onClick={openCashOffViaWhatsApp}
                   className="cashoff-action-link whatsapp"
                 >
                   <span className="cashoff-action-emoji" aria-hidden="true">🛍️</span>
@@ -1159,8 +1588,9 @@ export default function SpinWheelClient() {
           )}
 
           <button
+            type="button"
             onClick={() => setShowBag(true)}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-4 text-sm font-800 uppercase tracking-widest text-slate-600 md:hidden"
+            className="cashoff-prizes-button"
           >
             <i className="fas fa-box-open" /> View My Prizes
           </button>
@@ -1252,7 +1682,7 @@ export default function SpinWheelClient() {
                 type="button"
                 onClick={() => {
                   setShowHelp(false);
-                  useCashOffViaWhatsApp();
+                  openCashOffViaWhatsApp();
                 }}
                 className="cashoff-modal-primary"
               >
@@ -1290,33 +1720,38 @@ export default function SpinWheelClient() {
 
               <div className="cashoff-register-kicker">
                 <i className="fas fa-bolt" />
-                <span>Your free spin is ready</span>
+                <span>{guestResult ? "Your result is ready" : "Your free spin is ready"}</span>
               </div>
 
               <h3 id="cashoff-register-title">
-                One step to <span>Spin & Save</span>
+                {guestResult ? (
+                  <>You won <span>{cleanDisplayText(guestResult.label)}</span></>
+                ) : (
+                  <>One step to <span>Spin & Save</span></>
+                )}
               </h3>
 
               <p>
-                Enter your correct details so every Cash Off reward stays linked
-                to you and can be used on eligible EmmyTech orders.
+                {guestResult
+                  ? "Enter your correct details to link this result to you and continue to your claim options."
+                  : "Enter your correct details so every Cash Off reward stays linked to you and can be used on eligible EmmyTech orders."}
               </p>
             </header>
 
             <div className="cashoff-register-steps" aria-label="How it works">
               <div>
                 <span>1</span>
-                <strong>Register</strong>
+                <strong>{guestResult ? "You spun" : "Register"}</strong>
               </div>
               <i className="fas fa-chevron-right" />
               <div>
                 <span>2</span>
-                <strong>Spin</strong>
+                <strong>{guestResult ? "Register" : "Spin"}</strong>
               </div>
               <i className="fas fa-chevron-right" />
               <div>
                 <span>3</span>
-                <strong>Save</strong>
+                <strong>{guestResult ? "Claim" : "Save"}</strong>
               </div>
             </div>
 
@@ -1400,7 +1835,7 @@ export default function SpinWheelClient() {
                   </>
                 ) : (
                   <>
-                    <span>Unlock my free spin</span>
+                    <span>{guestResult ? "Link and claim my result" : "Unlock my free spin"}</span>
                     <i className="fas fa-arrow-right" />
                   </>
                 )}
@@ -1538,10 +1973,49 @@ export default function SpinWheelClient() {
                     <strong>Added to your prize bag</strong>
                   </div>
                 </div>
-              )}
+            )}
 
             <div className="cashoff-result-actions">
-              {lastResult.result_type === "retry" ? (
+              <p className="cashoff-result-share-note">
+                Share to your WhatsApp Status for one instant bonus spin. You
+                can also earn another spin when a valid referral completes theirs.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => void shareStatusAndClaimBonus()}
+                disabled={
+                  claimingShareBonus ||
+                  shareBonusClaimedFor === lastResult.spin_log_id
+                }
+                className="cashoff-result-primary status-bonus"
+              >
+                <i className="fab fa-whatsapp" />
+                <span>
+                  {shareBonusClaimedFor === lastResult.spin_log_id
+                    ? "Bonus claimed!"
+                    : claimingShareBonus
+                      ? "Adding your bonus..."
+                      : "Share to Status & get +1 spin"}
+                </span>
+              </button>
+
+              {lastResult.result_type !== "retry" && (
+                <button
+                  type="button"
+                  onClick={claimViaWhatsApp}
+                  className="cashoff-result-whatsapp-claim"
+                >
+                  <i className="fab fa-whatsapp" />
+                  <span>
+                    {lastResult.result_type === "cash"
+                      ? `Message EmmyTech to claim ${moneyFmt(lastResult.cash_amount)}`
+                      : "Message EmmyTech to claim my reward"}
+                  </span>
+                </button>
+              )}
+
+              <div className="cashoff-result-secondary-row">
                 <button
                   type="button"
                   onClick={() => {
@@ -1549,55 +2023,26 @@ export default function SpinWheelClient() {
                     setShareCopied(false);
                     setShowShare(true);
                   }}
-                  className="cashoff-result-primary"
-                >
-                  <i className="fas fa-user-plus" />
-                  <span>Share & get another spin</span>
-                </button>
-              ) : lastResult.result_type === "cash" ? (
-                <button
-                  type="button"
-                  onClick={useCashOffViaWhatsApp}
-                  className="cashoff-result-primary"
-                >
-                  <i className="fab fa-whatsapp" />
-                  <span>Use my Cash Off</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={claimViaWhatsApp}
-                  className="cashoff-result-primary"
-                >
-                  <i className="fab fa-whatsapp" />
-                  <span>Message EmmyTech</span>
-                </button>
-              )}
-
-              <div className="cashoff-result-secondary-row">
-                <button
-                  type="button"
-                  onClick={() => setShowResult(false)}
                   className="cashoff-result-secondary"
                 >
-                  <i className="fas fa-redo-alt" />
-                  <span>
-                    {Number(player?.spins_remaining || 0) > 0
-                      ? "Back to wheel"
-                      : "Close"}
-                  </span>
+                  <i className="fas fa-share-alt" />
+                  <span>More share options</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
                     setShowResult(false);
-                    setShowBag(true);
+                    requestAccess();
                   }}
                   className="cashoff-result-secondary"
                 >
-                  <i className="fas fa-box-open" />
-                  <span>Prize bag</span>
+                  <i className="fas fa-redo-alt" />
+                  <span>
+                    {Number(player?.spins_remaining || 0) > 0
+                      ? "Spin again"
+                      : "Get more spins"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1734,7 +2179,7 @@ export default function SpinWheelClient() {
               <div className="cashoff-share-grid">
                 <button
                   type="button"
-                  onClick={shareToWhatsAppStatus}
+                  onClick={() => void shareStatusAndClaimBonus()}
                   className="cashoff-share-button status"
                 >
                   <span className="share-icon">
@@ -1957,7 +2402,7 @@ export default function SpinWheelClient() {
               {player && (
                 <button
                   type="button"
-                  onClick={useCashOffViaWhatsApp}
+                  onClick={openCashOffViaWhatsApp}
                   className="cashoff-bag-secondary"
                 >
                   <i className="fab fa-whatsapp" />

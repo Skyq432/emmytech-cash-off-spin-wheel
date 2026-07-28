@@ -81,12 +81,23 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const spinPlayerId = String(body.spinPlayerId || "").trim();
+    let spinPlayerId = String(body.spinPlayerId || "").trim();
+    const wheelSessionToken = String(body.wheelSessionToken || "").trim();
     const requestId = String(body.requestId || "").trim();
 
-    if (!spinPlayerId) {
+    if (!spinPlayerId && !/^[0-9a-f]{64}$/i.test(wheelSessionToken)) {
       return NextResponse.json(
-        { ok: false, error: "spinPlayerId is required." },
+        {
+          ok: false,
+          error: "A spinPlayerId or valid wheelSessionToken is required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (spinPlayerId && !isUuid(spinPlayerId)) {
+      return NextResponse.json(
+        { ok: false, error: "A valid spinPlayerId is required." },
         { status: 400 }
       );
     }
@@ -96,6 +107,18 @@ export async function POST(req: NextRequest) {
         { ok: false, error: "A valid requestId is required." },
         { status: 400 }
       );
+    }
+
+    if (!spinPlayerId) {
+      const { data: session, error: sessionError } = await supabaseAdmin
+        .rpc("canonical_wheel_session_player", {
+          p_session_token: wheelSessionToken,
+        })
+        .single();
+
+      if (sessionError) throw new Error(sessionError.message);
+      const resolvedSession = session as { spin_player_id?: string } | null;
+      spinPlayerId = String(resolvedSession?.spin_player_id || "");
     }
 
     const { data: player, error: playerError } = await supabaseAdmin
@@ -151,6 +174,24 @@ export async function POST(req: NextRequest) {
     );
 
     if (error) throw new Error(error.message);
+
+    const { data: dailyState, error: dailyError } = await supabaseAdmin.rpc(
+      "claim_spin_daily_entitlement",
+      { p_spin_player_id: player.id }
+    );
+
+    if (dailyError) {
+      console.error("Post-spin daily entitlement error:", dailyError);
+    } else if (data?.spinPlayer) {
+      data.spinPlayer = {
+        ...data.spinPlayer,
+        spins_remaining: Number(dailyState?.spins_remaining || 0),
+        daily_spin_available: Boolean(dailyState?.daily_available),
+        last_daily_spin_granted_on:
+          dailyState?.last_daily_spin_granted_on || null,
+      };
+      data.daily = dailyState;
+    }
 
     return NextResponse.json(data);
   } catch (error) {

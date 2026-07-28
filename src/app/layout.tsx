@@ -1,16 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://emmytechnology.com";
 const OG_IMAGE =
@@ -18,13 +7,13 @@ const OG_IMAGE =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "EmmyTech Spin & Win — Free Spin, Cash & Gadgets",
+  title: "Spin & Win Cash | EmmyTech Cash Off Challenge",
   description:
-    "Spin the EmmyTech wheel for a chance to win cash, gadgets, and more. Register free, spin now, and refer friends for bonus spins.",
+    "Spin the EmmyTech wheel for a chance to win cash, Cash Off shopping credit, gadgets, and bonus spins. Register free and share your referral link for more chances to play.",
   openGraph: {
-    title: "EmmyTech Spin & Win 🎡",
+    title: "Spin & Win with EmmyTech 🎡",
     description:
-      "Spin free. Win cash, gadgets, and more. Refer a friend and get an extra spin.",
+      "Get a free spin for a chance to win cash, Cash Off shopping credit, gadgets, and bonus spins. Share with friends for more chances to play.",
     url: SITE_URL,
     siteName: "EmmyTech Spin & Win",
     images: [
@@ -40,9 +29,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "EmmyTech Spin & Win 🎡",
+    title: "Spin & Win with EmmyTech 🎡",
     description:
-      "Spin free. Win cash, gadgets, and more. Refer a friend and get an extra spin.",
+      "Get a free spin for a chance to win cash, Cash Off shopping credit, gadgets, and bonus spins.",
     images: [OG_IMAGE],
   },
 };
@@ -53,10 +42,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

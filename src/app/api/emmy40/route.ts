@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,10 @@ const MAX_ROWS = 5000;
 
 type Row = Record<string, any>;
 
-function authorized(req: NextRequest) {
+async function authorized(req: NextRequest) {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) return false;
   const supplied = req.headers.get("x-emmy40-password") || "";
   const expected = process.env.EMMY40_ADMIN_PASSWORD || DEFAULT_PASSWORD;
   return supplied.length > 0 && supplied === expected;
@@ -478,7 +482,7 @@ async function deleteRecord(table: string, id: string) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return deny();
+  if (!(await authorized(req))) return deny();
 
   try {
     const section =
@@ -712,7 +716,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!authorized(req)) return deny();
+  if (!(await authorized(req))) return deny();
 
   try {
     const body = await req.json();

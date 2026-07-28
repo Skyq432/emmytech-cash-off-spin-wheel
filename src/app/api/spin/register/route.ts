@@ -62,6 +62,12 @@ export async function POST(req: NextRequest) {
     const fullName = String(body.fullName || "").trim();
     const phone = String(body.phone || "").trim();
     const email = String(body.email || "").trim();
+    const visitorId = body.visitorId
+      ? String(body.visitorId).trim()
+      : null;
+    const wheelSessionToken = body.wheelSessionToken
+      ? String(body.wheelSessionToken).trim()
+      : null;
     const referralCodeUsed = body.referralCode
       ? String(body.referralCode).trim()
       : null;
@@ -75,6 +81,79 @@ export async function POST(req: NextRequest) {
 
     const normalizedPhone = normalizePhone(phone);
     const cleanedEmail = cleanEmail(email);
+
+    if (
+      visitorId &&
+      (visitorId.length < 8 ||
+        visitorId.length > 200 ||
+        !/^[a-z0-9:_-]+$/i.test(visitorId))
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Visitor session is invalid." },
+        { status: 400 }
+      );
+    }
+
+    if (visitorId) {
+      if (wheelSessionToken && !/^[0-9a-f]{64}$/i.test(wheelSessionToken)) {
+        return NextResponse.json(
+          { ok: false, error: "Guest wheel session is invalid." },
+          { status: 400 }
+        );
+      }
+
+      if (wheelSessionToken) {
+        const { data: claim, error: claimError } = await supabaseAdmin.rpc(
+          "claim_canonical_wheel_guest",
+          {
+            p_session_token: wheelSessionToken,
+            p_full_name: fullName,
+            p_phone: normalizedPhone,
+            p_email: cleanedEmail,
+          }
+        );
+
+        if (claimError) throw new Error(claimError.message);
+
+        return NextResponse.json({
+          ok: true,
+          spinPlayer: claim.spin_player,
+          wheelSessionToken: claim.wheel_session_token,
+          message: "Guest reward linked to the registered player.",
+        });
+      }
+
+      const { data: canonical, error: canonicalError } =
+        await supabaseAdmin.rpc("bootstrap_canonical_wheel_visitor", {
+          p_visitor_id: visitorId,
+          p_full_name: fullName,
+          p_phone: normalizedPhone,
+          p_email: cleanedEmail,
+          p_referral_code: referralCodeUsed,
+        });
+
+      if (canonicalError) throw new Error(canonicalError.message);
+
+      const canonicalPlayerId = canonical?.state?.spin_player?.id;
+      if (!canonicalPlayerId) {
+        throw new Error("Registration completed without a spin player.");
+      }
+
+      const { data: spinPlayer, error: playerError } = await supabaseAdmin
+        .from("spin_players")
+        .select("*")
+        .eq("id", canonicalPlayerId)
+        .single();
+
+      if (playerError) throw new Error(playerError.message);
+
+      return NextResponse.json({
+        ok: true,
+        spinPlayer,
+        wheelSessionToken: canonical.wheel_session_token,
+        message: "Guest reward linked to the registered player.",
+      });
+    }
 
     const identity = await findOrCreateIdentity({
       fullName,

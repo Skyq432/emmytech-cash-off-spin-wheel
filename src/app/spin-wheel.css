@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap");
 @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css");
 
 :root {
@@ -13,7 +12,7 @@ html {
 }
 
 body {
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: #f8fafc;
   color: var(--emmy-slate);
   overflow-x: hidden;
@@ -58,36 +57,6 @@ body {
   height: 100%;
   border-radius: 50%;
   cursor: pointer;
-}
-
-.hub {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 30;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: #fff;
-  border: 4px solid var(--emmy-blue);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-@keyframes tick-pop {
-  0% {
-    transform: translate(-50%, -50%) scale(1.2);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-.hub.ticking {
-  animation: tick-pop 0.1s ease-out;
 }
 
 .pointer-3d {
@@ -3649,5 +3618,482 @@ body {
 
   .cash-challenge-amount small {
     display: none;
+  }
+}
+
+/* Selectively merged UI/UX refinements */
+.cashoff-trust-bar {
+  position: relative;
+  z-index: 40;
+  border-bottom: 1px solid rgba(0, 51, 153, 0.08);
+  background: linear-gradient(90deg, #eef4ff, #fff8e8, #eef4ff);
+  color: #475569;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.cashoff-trust-bar > div {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 16px;
+  text-align: center;
+}
+
+.cashoff-trust-bar strong {
+  color: var(--emmy-blue);
+  font-weight: 850;
+}
+
+.cashoff-trust-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.13);
+  animation: cashoffTrustPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes cashoffTrustPulse {
+  50% {
+    transform: scale(0.82);
+    opacity: 0.65;
+  }
+}
+
+.wheel-outer::after {
+  content: "";
+  position: absolute;
+  inset: -24px;
+  z-index: -2;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(26, 92, 255, 0.16) 0%,
+    rgba(251, 176, 59, 0.08) 46%,
+    transparent 72%
+  );
+  filter: blur(10px);
+  pointer-events: none;
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+.wheel-outer.spinning::after {
+  opacity: 1;
+  transform: scale(1.08);
+  animation: wheelAuraPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes wheelAuraPulse {
+  50% {
+    opacity: 0.62;
+    transform: scale(1.02);
+  }
+}
+
+.wheel-outer.spinning .pointer-3d {
+  animation: wheelPointerBob 420ms ease-in-out infinite alternate;
+}
+
+@keyframes wheelPointerBob {
+  to {
+    transform: translateX(-50%) translateY(-3px);
+  }
+}
+
+.cashoff-result-share-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 51, 153, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 51, 153, 0.04);
+  color: #526079;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cashoff-app-root button:focus-visible,
+.cashoff-app-root a:focus-visible,
+.wheel-canvas:focus-visible,
+.cashoff-app-root input:focus-visible {
+  outline: 3px solid rgba(251, 176, 59, 0.95);
+  outline-offset: 3px;
+}
+
+@supports (padding: env(safe-area-inset-top)) {
+  .cashoff-app-root > nav {
+    padding-top: calc(1rem + env(safe-area-inset-top));
+  }
+
+  .cashoff-app-root {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (max-width: 520px) {
+  .cashoff-trust-bar > div {
+    gap: 7px;
+    padding-inline: 10px;
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cashoff-trust-dot,
+  .wheel-outer::after,
+  .wheel-outer.spinning .pointer-3d,
+  .hub.ticking,
+  .cashoff-main-spin-button,
+  .cashoff-result-icon,
+  .cashoff-action-emoji,
+  .confetti {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Viral-loop result actions: sharing is primary, claiming is secondary. */
+.cashoff-result-primary.status-bonus {
+  background: linear-gradient(135deg, #fbb03b 0%, #ff9500 100%);
+  color: #172033;
+  box-shadow: 0 14px 29px rgba(251, 176, 59, 0.28);
+}
+
+.cashoff-result-primary.status-bonus:hover {
+  box-shadow: 0 18px 35px rgba(251, 176, 59, 0.34);
+}
+
+.cashoff-result-primary.status-bonus .fa-whatsapp {
+  color: #0a9f47;
+}
+
+.cashoff-result-primary.status-bonus:disabled {
+  cursor: default;
+  opacity: 0.72;
+  transform: none;
+}
+
+.cashoff-result-whatsapp-claim {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 16px;
+  background: #25d366;
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(37, 211, 102, 0.2);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.cashoff-result-whatsapp-claim:hover {
+  background: #20b858;
+  transform: translateY(-1px);
+}
+
+.cashoff-result-whatsapp-claim:active {
+  transform: scale(0.986);
+}
+
+/* One non-stacking daily entitlement; earned spins remain in the balance. */
+.cw-daily-banner {
+  width: min(100%, 420px);
+  margin: 0 auto 18px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(0, 51, 153, 0.15);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 51, 153, 0.07),
+    rgba(251, 176, 59, 0.1)
+  );
+  box-shadow: 0 12px 28px rgba(0, 51, 153, 0.07);
+  text-align: left;
+  animation: referral-banner-in 0.5s ease-out;
+}
+
+.cw-daily-banner.cw-daily-countdown {
+  border-color: rgba(100, 116, 139, 0.16);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.cw-daily-icon {
+  flex-shrink: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.cw-daily-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cw-daily-text strong {
+  color: var(--emmy-slate);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cw-daily-text span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .cw-daily-banner {
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .cw-daily-icon {
+    font-size: 20px;
+  }
+
+  .cw-daily-text strong {
+    font-size: 12px;
+  }
+
+  .cw-daily-text span {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-daily-banner {
+    animation: none !important;
+  }
+}
+
+/* Canvas-integrated 3D wheel: level face, restrained depth, no perspective tilt. */
+.wheel-stage {
+  perspective: none;
+}
+
+.wheel-outer,
+.wheel-outer.spinning {
+  isolation: isolate;
+  transform: none;
+  transform-style: flat;
+  filter:
+    drop-shadow(0 20px 20px rgba(0, 51, 153, 0.12))
+    drop-shadow(0 8px 8px rgba(0, 0, 0, 0.06));
+  transition: filter 260ms ease, transform 260ms ease;
+}
+
+.wheel-outer.spinning {
+  transform: scale(1.005);
+  filter:
+    drop-shadow(0 22px 22px rgba(0, 51, 153, 0.1))
+    drop-shadow(0 8px 9px rgba(0, 0, 0, 0.05));
+}
+
+.wheel-canvas {
+  position: relative;
+  z-index: 10;
+  border: 0;
+  box-shadow: none;
+  transform: none;
+  backface-visibility: visible;
+}
+
+.pointer-3d {
+  top: -14px;
+  transform: translateX(-50%);
+  transform-origin: 50% 18%;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  animation: wheelPointerFloat 3s ease-in-out infinite;
+}
+
+.pointer-3d svg {
+  overflow: visible;
+  filter: none;
+}
+
+.wheel-outer.spinning .pointer-3d {
+  animation: none;
+}
+
+@keyframes wheelPointerFloat {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-3px);
+  }
+}
+
+@media (max-width: 520px) {
+  .wheel-outer,
+  .wheel-outer.spinning {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel-outer,
+  .pointer-3d {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Secondary mobile action: visually quieter than the primary spin CTA. */
+.cashoff-prizes-button {
+  display: none;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: var(--emmy-blue);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.cashoff-prizes-button:hover {
+  border-color: rgba(0, 51, 153, 0.18);
+  background: #eef4ff;
+  box-shadow: 0 6px 16px rgba(0, 51, 153, 0.08);
+}
+
+.cashoff-prizes-button:focus-visible {
+  outline: 3px solid rgba(26, 92, 255, 0.28);
+  outline-offset: 3px;
+}
+
+.cashoff-prizes-button:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 767px) {
+  .cashoff-prizes-button {
+    display: flex;
+  }
+}
+
+/* Personalized social proof for visitors arriving through a referral link. */
+.cw-referral-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 420px);
+  margin: 0 auto 18px;
+  padding: 12px 16px;
+  border: 1px solid rgba(251, 176, 59, 0.34);
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(251, 176, 59, 0.12),
+    rgba(0, 51, 153, 0.06)
+  );
+  box-shadow: 0 12px 28px rgba(0, 51, 153, 0.08);
+  text-align: left;
+  animation: referral-banner-in 0.5s ease-out;
+}
+
+.cw-referral-icon {
+  flex-shrink: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.cw-referral-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cw-referral-text strong {
+  color: var(--emmy-slate);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.cw-referral-text span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+@keyframes referral-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .cw-referral-banner {
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .cw-referral-icon {
+    font-size: 20px;
+  }
+
+  .cw-referral-text strong {
+    font-size: 12px;
+  }
+
+  .cw-referral-text span {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-referral-banner {
+    animation: none !important;
+  }
+
+  .cashoff-prizes-button {
+    transition: none;
   }
 }
