@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { AdminHelpProvider, HelpButton, type HelpKey } from "./AdminHelp";
 
 type Tab =
   | "overview"
@@ -379,7 +380,8 @@ export default function Emmy40Client() {
   }
 
   return (
-    <div className="e40-app">
+    <AdminHelpProvider>
+      <div className="e40-app">
       <aside className={`e40-sidebar ${mobileNav ? "open" : ""}`}>
         <div className="e40-brand">
           <strong>
@@ -686,7 +688,8 @@ export default function Emmy40Client() {
           }
         />
       )}
-    </div>
+      </div>
+    </AdminHelpProvider>
   );
 }
 
@@ -704,8 +707,14 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
     <>
       <section className="e40-filter-card e40-filter-compact">
         <div>
-          <small>Report period</small>
-          <h2>Campaign performance</h2>
+          <span className="e40-inline-label">
+            <small>Report period</small>
+            <HelpButton topic="report-period" />
+          </span>
+          <div className="e40-title-with-help">
+            <h2>Campaign performance</h2>
+            <HelpButton topic="campaign-overview" />
+          </div>
           <p>Review spins, referrals and Cash Off activity.</p>
         </div>
 
@@ -731,49 +740,72 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
       </section>
 
       <div className="e40-stats e40-stats-primary">
-        <Stat title="Total spins" value={metrics.spins || 0} icon="↻" />
+        <Stat
+          title="Total spins"
+          value={metrics.spins || 0}
+          icon="↻"
+          helpTopic="total-spins"
+        />
         <Stat
           title="Active players"
           value={metrics.activePlayers || 0}
           icon="♟"
+          helpTopic="active-players"
         />
         <Stat
           title="New referrals"
           value={metrics.referrals || 0}
           icon="＋"
+          helpTopic="new-referrals"
         />
         <Stat
           title="Cash Off credited"
           value={formatMoney(metrics.cashOffCredited)}
           icon="₦"
+          helpTopic="cash-off-credited"
         />
       </div>
 
-      <div className="e40-stats e40-stats-operations">
-        <Stat
-          title="Active Cash Challenges"
-          value={metrics.activeChallenges || 0}
-          icon="◷"
-        />
-        <Stat
-          title="Cash Payout Due"
-          value={formatMoney(metrics.cashPayoutDue)}
-          icon="₦"
-        />
-        <Stat
-          title="Daily Spins Ready"
-          value={metrics.dailySpinReady || 0}
-          icon="↻"
-        />
-        <Stat
-          title="Bonus Spins Awarded"
-          value={
-            Number(metrics.referralBonusSpins || 0) +
-            Number(metrics.shareBonusSpins || 0)
-          }
-          icon="+"
-        />
-      </div>
+      <details className="e40-disclosure e40-more-insights">
+        <summary>
+          <span>
+            <strong>More insights</strong>
+            <small>Open operational metrics that need less frequent attention.</small>
+          </span>
+          <i aria-hidden="true">⌄</i>
+        </summary>
+        <div className="e40-disclosure-body">
+          <div className="e40-stats e40-stats-operations">
+            <Stat
+              title="Active Cash Challenges"
+              value={metrics.activeChallenges || 0}
+              icon="◷"
+              helpTopic="active-challenges"
+            />
+            <Stat
+              title="Cash Payout Due"
+              value={formatMoney(metrics.cashPayoutDue)}
+              icon="₦"
+              helpTopic="cash-payout-due"
+            />
+            <Stat
+              title="Daily Spins Ready"
+              value={metrics.dailySpinReady || 0}
+              icon="↻"
+              helpTopic="daily-spins-ready"
+            />
+            <Stat
+              title="Bonus Spins Awarded"
+              value={
+                Number(metrics.referralBonusSpins || 0) +
+                Number(metrics.shareBonusSpins || 0)
+              }
+              icon="+"
+              helpTopic="bonus-spins"
+            />
+          </div>
+        </div>
+      </details>
 
       <div className="e40-overview-grid">
         <section className="e40-card e40-trend-card">
@@ -782,13 +814,16 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
               <small>Last seven days</small>
               <h3>Spin Activity Trend</h3>
             </div>
-            <span className="e40-chart-total">
+            <div className="e40-card-actions">
+              <HelpButton topic="spin-trend" />
+              <span className="e40-chart-total">
               {daily.reduce(
                 (sum: number, item: any) => sum + Number(item.count || 0),
                 0
               )}{" "}
               spins
-            </span>
+              </span>
+            </div>
           </div>
 
           <TrendChart daily={daily} />
@@ -800,9 +835,12 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
               <small>Campaign health</small>
               <h3>{metrics.loopStatus || "No loop"}</h3>
             </div>
-            <span className="e40-health-score">
-              {Number(metrics.viralScore || 0).toFixed(2)}
-            </span>
+            <div className="e40-card-actions">
+              <HelpButton topic="viral-score" />
+              <span className="e40-health-score">
+                {Number(metrics.viralScore || 0).toFixed(2)}
+              </span>
+            </div>
           </div>
 
           <div className="e40-health-list">
@@ -819,7 +857,10 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
               </strong>
             </div>
             <div>
-              <span>Current Cash Off liability</span>
+              <span className="e40-inline-label">
+                Current Cash Off liability
+                <HelpButton topic="cash-off-liability" />
+              </span>
               <strong>{formatMoney(metrics.currentCashOff)}</strong>
             </div>
             <div>
@@ -841,6 +882,7 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
               <small>Winning results</small>
               <h3>Prize Distribution</h3>
             </div>
+            <HelpButton topic="prize-distribution" />
           </div>
 
           <div className="e40-distribution">
@@ -875,6 +917,7 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
               <small>Newest events</small>
               <h3>Recent Spin Activity</h3>
             </div>
+            <HelpButton topic="recent-spins" />
           </div>
 
           <div className="e40-activity">
@@ -942,118 +985,165 @@ function RewardOperations({
         eyebrow="Live reward controls"
         title="Reward Operations"
         description="Track Cash Challenges, payout decisions, daily spins and the referral loop from one place."
+        helpTopic="reward-operations"
       />
 
-      <div className="e40-deployment-grid">
-        <DeploymentState
-          ready={deployment.dailyEntitlement}
-          title="Daily-spin entitlement"
-          description={
-            deployment.dailyEntitlement
-              ? "Tracking is available in this database."
-              : "The daily-spin migration is not deployed here yet."
-          }
-        />
-        <DeploymentState
-          ready={deployment.shareBonus}
-          title="Share bonus"
-          description={
-            deployment.shareBonus
-              ? "Share claims are being read from the reward ledger."
-              : "The share-bonus table is not deployed here yet."
-          }
-        />
-        <DeploymentState
-          ready={deployment.referralOpenTracking}
-          pending={!deployment.referralOpenTracking}
-          title="Referral link visits"
-          description={
-            deployment.referralOpenTracking
-              ? "Unique browser visits are now arriving."
-              : "Ready; waiting for the first tracked referral visit."
-          }
-        />
-        <DeploymentState
-          ready={deployment.guideTracking}
-          pending={!deployment.guideTracking}
-          title="Reward guide funnel"
-          description={
-            deployment.guideTracking
-              ? "Started, completed and skipped events are available."
-              : "Ready; waiting for the first guided spin."
-          }
-        />
-      </div>
+      <details className="e40-disclosure e40-system-status">
+        <summary>
+          <span>
+            <strong>System status</strong>
+            <small>Database readiness and event-tracking checks.</small>
+          </span>
+          <span className="e40-summary-actions">
+            <HelpButton topic="system-status" />
+            <i aria-hidden="true">⌄</i>
+          </span>
+        </summary>
+        <div className="e40-disclosure-body">
+          <div className="e40-deployment-grid">
+            <DeploymentState
+              ready={deployment.dailyEntitlement}
+              title="Daily-spin entitlement"
+              description={
+                deployment.dailyEntitlement
+                  ? "Tracking is available in this database."
+                  : "The daily-spin migration is not deployed here yet."
+              }
+            />
+            <DeploymentState
+              ready={deployment.shareBonus}
+              title="Share bonus"
+              description={
+                deployment.shareBonus
+                  ? "Share claims are being read from the reward ledger."
+                  : "The share-bonus table is not deployed here yet."
+              }
+            />
+            <DeploymentState
+              ready={deployment.referralOpenTracking}
+              pending={!deployment.referralOpenTracking}
+              title="Referral link visits"
+              description={
+                deployment.referralOpenTracking
+                  ? "Unique browser visits are now arriving."
+                  : "Ready; waiting for the first tracked referral visit."
+              }
+            />
+            <DeploymentState
+              ready={deployment.guideTracking}
+              pending={!deployment.guideTracking}
+              title="Reward guide funnel"
+              description={
+                deployment.guideTracking
+                  ? "Started, completed and skipped events are available."
+                  : "Ready; waiting for the first guided spin."
+              }
+            />
+          </div>
+        </div>
+      </details>
 
-      <div className="e40-stats e40-operation-stats">
+      <div className="e40-stats e40-operation-stats e40-operation-primary">
         <Stat
           title="Active Challenges"
           value={metrics.activeChallenges || 0}
           icon="◷"
-        />
-        <Stat
-          title="Challenge Cash"
-          value={formatMoney(metrics.activeChallengeCash)}
-          icon="₦"
+          helpTopic="active-challenges"
         />
         <Stat
           title="Cash Payout Due"
           value={formatMoney(metrics.cashPayoutDue)}
           icon="!"
+          helpTopic="cash-payout-due"
         />
         <Stat
           title="Pending Cashouts"
           value={metrics.pendingCashouts || 0}
           icon="▣"
-        />
-        <Stat
-          title="Converted to Cash Off"
-          value={formatMoney(metrics.convertedCashOff)}
-          icon="↔"
+          helpTopic="pending-cashouts"
         />
         <Stat
           title="Daily Spins Ready"
           value={metrics.dailySpinReady || 0}
           icon="↻"
+          helpTopic="daily-spins-ready"
         />
       </div>
 
-      <div className="e40-grid-3 e40-funnel-grid">
-        <section className="e40-card e40-funnel-card">
-          <small>Referral funnel</small>
-          <h3>{Number(metrics.referralConversionRate || 0).toFixed(1)}%</h3>
-          <p>Tracked visits that became registered referrals.</p>
-          <div>
-            <span>{metrics.referralLinkOpens || 0} visits</span>
-            <strong>{metrics.referralRegistrations || 0} registrations</strong>
+      <details className="e40-disclosure e40-more-insights">
+        <summary>
+          <span>
+            <strong>More reward insights</strong>
+            <small>Challenge balances, conversions and growth performance.</small>
+          </span>
+          <i aria-hidden="true">⌄</i>
+        </summary>
+        <div className="e40-disclosure-body">
+          <div className="e40-stats e40-stats-operations e40-operation-secondary">
+            <Stat
+              title="Challenge Cash"
+              value={formatMoney(metrics.activeChallengeCash)}
+              icon="₦"
+              helpTopic="challenge-cash"
+            />
+            <Stat
+              title="Converted to Cash Off"
+              value={formatMoney(metrics.convertedCashOff)}
+              icon="↔"
+              helpTopic="converted-cash-off"
+            />
           </div>
-        </section>
-        <section className="e40-card e40-funnel-card">
-          <small>Bonus-spin ledger</small>
-          <h3>
-            {Number(metrics.referralBonusSpins || 0) +
-              Number(metrics.shareBonusSpins || 0)}
-          </h3>
-          <p>Spins awarded through growth actions.</p>
-          <div>
-            <span>{metrics.referralBonusSpins || 0} referral</span>
-            <strong>{metrics.shareBonusSpins || 0} share</strong>
+
+          <div className="e40-grid-3 e40-funnel-grid">
+            <section className="e40-card e40-funnel-card">
+              <div className="e40-funnel-heading">
+                <small>Referral funnel</small>
+                <HelpButton topic="referral-funnel" />
+              </div>
+              <h3>{Number(metrics.referralConversionRate || 0).toFixed(1)}%</h3>
+              <p>Tracked visits that became registered referrals.</p>
+              <div>
+                <span>{metrics.referralLinkOpens || 0} visits</span>
+                <strong>{metrics.referralRegistrations || 0} registrations</strong>
+              </div>
+            </section>
+            <section className="e40-card e40-funnel-card">
+              <div className="e40-funnel-heading">
+                <small>Bonus-spin ledger</small>
+                <HelpButton topic="bonus-ledger" />
+              </div>
+              <h3>
+                {Number(metrics.referralBonusSpins || 0) +
+                  Number(metrics.shareBonusSpins || 0)}
+              </h3>
+              <p>Spins awarded through growth actions.</p>
+              <div>
+                <span>{metrics.referralBonusSpins || 0} referral</span>
+                <strong>{metrics.shareBonusSpins || 0} share</strong>
+              </div>
+            </section>
+            <section className="e40-card e40-funnel-card">
+              <div className="e40-funnel-heading">
+                <small>Reward education</small>
+                <HelpButton topic="reward-guide" />
+              </div>
+              <h3>{Number(metrics.guideCompletionRate || 0).toFixed(1)}%</h3>
+              <p>New players who completed the reward guide.</p>
+              <div>
+                <span>{metrics.guideStarted || 0} started</span>
+                <strong>{metrics.guideSkipped || 0} skipped</strong>
+              </div>
+            </section>
           </div>
-        </section>
-        <section className="e40-card e40-funnel-card">
-          <small>Reward education</small>
-          <h3>{Number(metrics.guideCompletionRate || 0).toFixed(1)}%</h3>
-          <p>New players who completed the reward guide.</p>
-          <div>
-            <span>{metrics.guideStarted || 0} started</span>
-            <strong>{metrics.guideSkipped || 0} skipped</strong>
-          </div>
-        </section>
-      </div>
+        </div>
+      </details>
 
       <section className="e40-toolbar e40-operation-toolbar">
         <div>
-          <strong>Cash Challenge queue</strong>
+          <div className="e40-title-with-help">
+            <strong>Cash Challenge queue</strong>
+            <HelpButton topic="challenge-queue" />
+          </div>
           <span>{pagination.total || 0} matching challenges</span>
         </div>
         <select value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -1131,9 +1221,12 @@ function RewardOperations({
               <small>Payout decisions</small>
               <h3>Cashout Requests</h3>
             </div>
-            <span className="e40-chart-total">
-              {formatMoney(metrics.pendingCashoutAmount)} pending
-            </span>
+            <div className="e40-card-actions">
+              <HelpButton topic="cashout-requests" />
+              <span className="e40-chart-total">
+                {formatMoney(metrics.pendingCashoutAmount)} pending
+              </span>
+            </div>
           </div>
 
           <div className="e40-cashout-list">
@@ -1173,6 +1266,7 @@ function RewardOperations({
               <small>Growth leaders</small>
               <h3>Top Referrers</h3>
             </div>
+            <HelpButton topic="top-referrers" />
           </div>
 
           <div className="e40-referrer-list">
@@ -1208,6 +1302,7 @@ function RewardOperations({
             <small>Attribution ledger</small>
             <h3>Recent Referral & Share Bonuses</h3>
           </div>
+          <HelpButton topic="bonus-activity" />
         </div>
 
         <div className="e40-bonus-feed">
@@ -1326,10 +1421,23 @@ function TrendChart({ daily }: { daily: Array<{ day: string; count: number }> })
   );
 }
 
-function Stat({ title, value, icon }: any) {
+function Stat({
+  title,
+  value,
+  icon,
+  helpTopic,
+}: {
+  title: string;
+  value: ReactNode;
+  icon: string;
+  helpTopic?: HelpKey;
+}) {
   return (
     <article className="e40-stat">
-      <i>{icon}</i>
+      <div className="e40-stat-top">
+        <i>{icon}</i>
+        {helpTopic && <HelpButton topic={helpTopic} />}
+      </div>
       <small>{title}</small>
       <strong>{value}</strong>
     </article>
@@ -1345,6 +1453,7 @@ function Prizes({ rows, edit, remove }: any) {
         eyebrow="Wheel setup"
         title="Wheel Prizes"
         description="Change the visible wheel segments and their Cash Off values."
+        helpTopic="prizes"
         actionLabel="+ Add Prize"
         action={() => edit()}
       />
@@ -1416,6 +1525,7 @@ function Rules({
         eyebrow="Game engine"
         title="Spin Rules"
         description="Control fixed spins, weighted bags, checkpoints and probability."
+        helpTopic="rules"
         actionLabel="+ New Group"
         action={() => editGroup()}
       />
@@ -1468,6 +1578,7 @@ function Rules({
               <small>Lower priority wins</small>
               <h3>Rule Groups</h3>
             </div>
+            <HelpButton topic="rule-groups" />
           </div>
 
           <div className="e40-rule-groups">
@@ -1509,12 +1620,15 @@ function Rules({
               <small>Selected group</small>
               <h3>Rule Items</h3>
             </div>
-            <button
-              disabled={!selectedGroupId}
-              onClick={() => editItem()}
-            >
-              + Add Item
-            </button>
+            <div className="e40-card-actions">
+              <HelpButton topic="rule-items" />
+              <button
+                disabled={!selectedGroupId}
+                onClick={() => editItem()}
+              >
+                + Add Item
+              </button>
+            </div>
           </div>
 
           <div className="e40-table-wrap">
@@ -1575,6 +1689,7 @@ function Claims({ rows, status, setStatus, refresh, update }: any) {
         eyebrow="Reward fulfilment"
         title="Prize Claims"
         description="Verify and fulfil every non-retry reward."
+        helpTopic="claims"
       />
 
       <section className="e40-toolbar">
@@ -1657,6 +1772,7 @@ function CashOff({ data, adjust }: any) {
         eyebrow="Shopping credit"
         title="Cash Off Control"
         description="See every balance and make fully recorded admin corrections."
+        helpTopic="cashoff"
       />
 
       <div className="e40-stats">
@@ -1782,6 +1898,7 @@ function Users({ rows, search, setSearch, refresh, openUser }: any) {
         eyebrow="Identity-linked records"
         title="User Database"
         description="Search players, inspect spins, rewards, referrals and Cash Off."
+        helpTopic="users"
       />
 
       <section className="e40-toolbar users">
@@ -1862,6 +1979,7 @@ function Logs({ rows, resultType, setResultType, refresh }: any) {
         eyebrow="Spin history"
         title="Audit Logs"
         description="Latest spin outcomes, mode, value and balance movement."
+        helpTopic="logs"
       />
 
       <section className="e40-toolbar">
@@ -1951,14 +2069,25 @@ function SectionHeader({
   eyebrow,
   title,
   description,
+  helpTopic,
   actionLabel,
   action,
-}: any) {
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  helpTopic?: HelpKey;
+  actionLabel?: string;
+  action?: () => void;
+}) {
   return (
     <header className="e40-section-header">
       <div>
         <small>{eyebrow}</small>
-        <h2>{title}</h2>
+        <div className="e40-title-with-help">
+          <h2>{title}</h2>
+          {helpTopic && <HelpButton topic={helpTopic} />}
+        </div>
         <p>{description}</p>
       </div>
       {actionLabel && <button onClick={action}>{actionLabel}</button>}
@@ -1979,11 +2108,26 @@ function Status({ value }: { value: unknown }) {
   );
 }
 
-function ModalShell({ title, subtitle, close, children }: any) {
+function ModalShell({
+  title,
+  subtitle,
+  helpTopic,
+  close,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  helpTopic: HelpKey;
+  close: () => void;
+  children: ReactNode;
+}) {
   return (
     <div className="e40-modal-overlay" onMouseDown={close}>
       <section
         className="e40-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -1992,7 +2136,10 @@ function ModalShell({ title, subtitle, close, children }: any) {
             <h2>{title}</h2>
             <p>{subtitle}</p>
           </div>
-          <button onClick={close}>×</button>
+          <div className="e40-modal-actions">
+            <HelpButton topic={helpTopic} />
+            <button type="button" aria-label="Close editor" onClick={close}>×</button>
+          </div>
         </header>
         <div className="e40-modal-body">{children}</div>
       </section>
@@ -2017,6 +2164,7 @@ function PrizeModal({ record, close, save }: any) {
     <ModalShell
       title={record ? "Edit Wheel Prize" : "Add Wheel Prize"}
       subtitle="This controls the visible wheel segment."
+      helpTopic="prize-editor"
       close={close}
     >
       <form
@@ -2026,93 +2174,112 @@ function PrizeModal({ record, close, save }: any) {
           save(form);
         }}
       >
-        <Field label="Prize label">
-          <input
-            required
-            value={form.label}
-            onChange={(event) =>
-              setForm({ ...form, label: event.target.value })
-            }
-          />
-        </Field>
-
-        <div className="e40-form-grid">
-          <Field label="Prize type">
-            <select
-              value={form.prize_type}
-              onChange={(event) =>
-                setForm({ ...form, prize_type: event.target.value })
-              }
-            >
-              <option value="cash">Cash Off</option>
-              <option value="retry">Try Again</option>
-              <option value="bonus_spin">Bonus Spin</option>
-              <option value="letter">Letter</option>
-              <option value="merchandise">Merchandise</option>
-              <option value="prize">Prize</option>
-            </select>
-          </Field>
-
-          <Field label="Cash Off value">
+        <div className="e40-form-section">
+          <div className="e40-form-section-title">
+            <strong>Basic settings</strong>
+            <small>The information an administrator changes most often.</small>
+          </div>
+          <Field label="Prize label">
             <input
-              type="number"
-              min="0"
-              value={form.monetary_value}
+              required
+              value={form.label}
               onChange={(event) =>
-                setForm({
-                  ...form,
-                  monetary_value: Number(event.target.value),
-                })
+                setForm({ ...form, label: event.target.value })
               }
             />
           </Field>
 
-          <Field label="Gravity">
-            <input
-              type="number"
-              min="0"
-              value={form.gravity}
-              onChange={(event) =>
-                setForm({ ...form, gravity: Number(event.target.value) })
-              }
-            />
-          </Field>
+          <div className="e40-form-grid">
+            <Field label="Prize type">
+              <select
+                value={form.prize_type}
+                onChange={(event) =>
+                  setForm({ ...form, prize_type: event.target.value })
+                }
+              >
+                <option value="cash">Cash Off</option>
+                <option value="retry">Try Again</option>
+                <option value="bonus_spin">Bonus Spin</option>
+                <option value="letter">Letter</option>
+                <option value="merchandise">Merchandise</option>
+                <option value="prize">Prize</option>
+              </select>
+            </Field>
 
-          <Field label="Stock">
-            <input
-              type="number"
-              min="0"
-              value={form.stock}
-              onChange={(event) =>
-                setForm({ ...form, stock: Number(event.target.value) })
-              }
-            />
-          </Field>
+            <Field label="Cash Off value">
+              <input
+                type="number"
+                min="0"
+                value={form.monetary_value}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    monetary_value: Number(event.target.value),
+                  })
+                }
+              />
+            </Field>
+          </div>
         </div>
 
-        <div className="e40-checks">
-          <Check
-            label="Active"
-            checked={form.is_active}
-            set={(value: boolean) =>
-              setForm({ ...form, is_active: value })
-            }
-          />
-          <Check
-            label="Show on wheel"
-            checked={form.on_wheel}
-            set={(value: boolean) =>
-              setForm({ ...form, on_wheel: value })
-            }
-          />
-          <Check
-            label="Near miss"
-            checked={form.near_miss}
-            set={(value: boolean) =>
-              setForm({ ...form, near_miss: value })
-            }
-          />
-        </div>
+        <details className="e40-form-advanced">
+          <summary>
+            <span>
+              <strong>Advanced settings</strong>
+              <small>Probability, availability and wheel behaviour.</small>
+            </span>
+            <i aria-hidden="true">⌄</i>
+          </summary>
+          <div className="e40-form-advanced-body">
+            <div className="e40-form-grid">
+              <Field label="Gravity">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.gravity}
+                  onChange={(event) =>
+                    setForm({ ...form, gravity: Number(event.target.value) })
+                  }
+                />
+              </Field>
+
+              <Field label="Stock">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.stock}
+                  onChange={(event) =>
+                    setForm({ ...form, stock: Number(event.target.value) })
+                  }
+                />
+              </Field>
+            </div>
+
+            <div className="e40-checks">
+              <Check
+                label="Active"
+                checked={form.is_active}
+                set={(value: boolean) =>
+                  setForm({ ...form, is_active: value })
+                }
+              />
+              <Check
+                label="Show on wheel"
+                checked={form.on_wheel}
+                set={(value: boolean) =>
+                  setForm({ ...form, on_wheel: value })
+                }
+              />
+              <Check
+                label="Near miss"
+                checked={form.near_miss}
+                set={(value: boolean) =>
+                  setForm({ ...form, near_miss: value })
+                }
+              />
+            </div>
+          </div>
+        </details>
 
         <button className="e40-submit">Save Prize</button>
       </form>
@@ -2137,6 +2304,7 @@ function GroupModal({ record, close, save }: any) {
     <ModalShell
       title={record ? "Edit Rule Group" : "Create Rule Group"}
       subtitle="A group decides which formula applies to a spin range."
+      helpTopic="group-editor"
       close={close}
     >
       <form
@@ -2146,87 +2314,107 @@ function GroupModal({ record, close, save }: any) {
           save(form);
         }}
       >
-        <div className="e40-form-grid">
-          <Field label="Group key">
-            <input
-              required
-              value={form.group_key}
-              onChange={(event) =>
-                setForm({ ...form, group_key: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Group name">
-            <input
-              required
-              value={form.group_name}
-              onChange={(event) =>
-                setForm({ ...form, group_name: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Group type">
-            <select
-              value={form.group_type}
-              onChange={(event) =>
-                setForm({ ...form, group_type: event.target.value })
-              }
-            >
-              <option value="fixed">Fixed</option>
-              <option value="weighted">Weighted / Shuffle</option>
-              <option value="checkpoint">Checkpoint</option>
-            </select>
-          </Field>
-          <Field label="Priority (lower wins)">
-            <input
-              type="number"
-              value={form.priority}
-              onChange={(event) =>
-                setForm({ ...form, priority: Number(event.target.value) })
-              }
-            />
-          </Field>
-          <Field label="Start spin">
-            <input
-              type="number"
-              min="1"
-              value={form.start_spin}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  start_spin: Number(event.target.value),
-                })
-              }
-            />
-          </Field>
-          <Field label="End spin (blank = forever)">
-            <input
-              type="number"
-              min="1"
-              value={form.end_spin}
-              onChange={(event) =>
-                setForm({ ...form, end_spin: event.target.value })
-              }
-            />
-          </Field>
+        <div className="e40-form-section">
+          <div className="e40-form-section-title">
+            <strong>Basic settings</strong>
+            <small>Name the group and choose its selection method.</small>
+          </div>
+          <div className="e40-form-grid">
+            <Field label="Group key">
+              <input
+                required
+                value={form.group_key}
+                onChange={(event) =>
+                  setForm({ ...form, group_key: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Group name">
+              <input
+                required
+                value={form.group_name}
+                onChange={(event) =>
+                  setForm({ ...form, group_name: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Group type">
+              <select
+                value={form.group_type}
+                onChange={(event) =>
+                  setForm({ ...form, group_type: event.target.value })
+                }
+              >
+                <option value="fixed">Fixed</option>
+                <option value="weighted">Weighted / Shuffle</option>
+                <option value="checkpoint">Checkpoint</option>
+              </select>
+            </Field>
+          </div>
         </div>
 
-        <Field label="Description">
-          <textarea
-            value={form.description}
-            onChange={(event) =>
-              setForm({ ...form, description: event.target.value })
-            }
-          />
-        </Field>
+        <details className="e40-form-advanced">
+          <summary>
+            <span>
+              <strong>Advanced settings</strong>
+              <small>Range, priority and operational notes.</small>
+            </span>
+            <i aria-hidden="true">⌄</i>
+          </summary>
+          <div className="e40-form-advanced-body">
+            <div className="e40-form-grid">
+              <Field label="Priority (lower wins)">
+                <input
+                  type="number"
+                  value={form.priority}
+                  onChange={(event) =>
+                    setForm({ ...form, priority: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Start spin">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.start_spin}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      start_spin: Number(event.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="End spin (blank = forever)">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.end_spin}
+                  onChange={(event) =>
+                    setForm({ ...form, end_spin: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
 
-        <Check
-          label="Group active"
-          checked={form.is_active}
-          set={(value: boolean) =>
-            setForm({ ...form, is_active: value })
-          }
-        />
+            <Field label="Description">
+              <textarea
+                value={form.description}
+                onChange={(event) =>
+                  setForm({ ...form, description: event.target.value })
+                }
+              />
+            </Field>
+
+            <Check
+              label="Group active"
+              checked={form.is_active}
+              set={(value: boolean) =>
+                setForm({ ...form, is_active: value })
+              }
+            />
+          </div>
+        </details>
 
         <button className="e40-submit">Save Rule Group</button>
       </form>
@@ -2254,6 +2442,7 @@ function ItemModal({ record, groups, close, save }: any) {
     <ModalShell
       title={record?.id ? "Edit Rule Item" : "Add Rule Item"}
       subtitle="This is the actual reward inside a rule group."
+      helpTopic="item-editor"
       close={close}
     >
       <form
@@ -2263,134 +2452,154 @@ function ItemModal({ record, groups, close, save }: any) {
           save(form);
         }}
       >
-        <Field label="Rule group">
-          <select
-            value={form.group_id}
-            onChange={(event) =>
-              setForm({ ...form, group_id: event.target.value })
-            }
-          >
-            {groups.map((group: any) => (
-              <option key={group.id} value={group.id}>
-                {group.group_name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="e40-form-grid">
-          <Field label="Item key">
-            <input
-              required
-              value={form.item_key}
-              onChange={(event) =>
-                setForm({ ...form, item_key: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Result label">
-            <input
-              required
-              value={form.result_label}
-              onChange={(event) =>
-                setForm({ ...form, result_label: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Result type">
+        <div className="e40-form-section">
+          <div className="e40-form-section-title">
+            <strong>Basic settings</strong>
+            <small>Choose the group and define the reward customers will see.</small>
+          </div>
+          <Field label="Rule group">
             <select
-              value={form.result_type}
+              value={form.group_id}
               onChange={(event) =>
-                setForm({ ...form, result_type: event.target.value })
+                setForm({ ...form, group_id: event.target.value })
               }
             >
-              <option value="cash">Cash Off</option>
-              <option value="retry">Try Again</option>
-              <option value="bonus_spin">Bonus Spin</option>
-              <option value="letter">Letter</option>
-              <option value="prize">Prize</option>
+              {groups.map((group: any) => (
+                <option key={group.id} value={group.id}>
+                  {group.group_name}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="Cash Off amount">
-            <input
-              type="number"
-              min="0"
-              value={form.cash_amount}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  cash_amount: Number(event.target.value),
-                })
-              }
-            />
-          </Field>
-          <Field label="Letter code">
-            <input
-              value={form.letter_code}
-              onChange={(event) =>
-                setForm({ ...form, letter_code: event.target.value })
-              }
-              placeholder="EM, MY, TE..."
-            />
-          </Field>
-          <Field label="Bonus spins">
-            <input
-              type="number"
-              min="0"
-              value={form.bonus_spins}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  bonus_spins: Number(event.target.value),
-                })
-              }
-            />
-          </Field>
-          <Field label="Gravity">
-            <input
-              type="number"
-              min="0"
-              value={form.gravity}
-              onChange={(event) =>
-                setForm({ ...form, gravity: Number(event.target.value) })
-              }
-            />
-          </Field>
-          <Field label="Item order">
-            <input
-              type="number"
-              min="1"
-              value={form.item_order}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  item_order: Number(event.target.value),
-                })
-              }
-            />
-          </Field>
-          <Field label="Max uses per user">
-            <input
-              type="number"
-              min="1"
-              value={form.max_uses_per_user}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  max_uses_per_user: Number(event.target.value),
-                })
-              }
-            />
-          </Field>
+
+          <div className="e40-form-grid">
+            <Field label="Item key">
+              <input
+                required
+                value={form.item_key}
+                onChange={(event) =>
+                  setForm({ ...form, item_key: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Result label">
+              <input
+                required
+                value={form.result_label}
+                onChange={(event) =>
+                  setForm({ ...form, result_label: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Result type">
+              <select
+                value={form.result_type}
+                onChange={(event) =>
+                  setForm({ ...form, result_type: event.target.value })
+                }
+              >
+                <option value="cash">Cash Off</option>
+                <option value="retry">Try Again</option>
+                <option value="bonus_spin">Bonus Spin</option>
+                <option value="letter">Letter</option>
+                <option value="prize">Prize</option>
+              </select>
+            </Field>
+            <Field label="Cash Off amount">
+              <input
+                type="number"
+                min="0"
+                value={form.cash_amount}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    cash_amount: Number(event.target.value),
+                  })
+                }
+              />
+            </Field>
+          </div>
         </div>
 
-        <Check
-          label="Item active"
-          checked={form.is_active}
-          set={(value: boolean) =>
-            setForm({ ...form, is_active: value })
-          }
-        />
+        <details className="e40-form-advanced">
+          <summary>
+            <span>
+              <strong>Advanced settings</strong>
+              <small>Letter, bonus, probability and per-user limits.</small>
+            </span>
+            <i aria-hidden="true">⌄</i>
+          </summary>
+          <div className="e40-form-advanced-body">
+            <div className="e40-form-grid">
+              <Field label="Letter code">
+                <input
+                  value={form.letter_code}
+                  onChange={(event) =>
+                    setForm({ ...form, letter_code: event.target.value })
+                  }
+                  placeholder="EM, MY, TE..."
+                />
+              </Field>
+              <Field label="Bonus spins">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.bonus_spins}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      bonus_spins: Number(event.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Gravity">
+                <input
+                  type="number"
+                  min="0"
+                  value={form.gravity}
+                  onChange={(event) =>
+                    setForm({ ...form, gravity: Number(event.target.value) })
+                  }
+                />
+              </Field>
+              <Field label="Item order">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.item_order}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      item_order: Number(event.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Max uses per user">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.max_uses_per_user}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      max_uses_per_user: Number(event.target.value),
+                    })
+                  }
+                />
+              </Field>
+            </div>
+
+            <Check
+              label="Item active"
+              checked={form.is_active}
+              set={(value: boolean) =>
+                setForm({ ...form, is_active: value })
+              }
+            />
+          </div>
+        </details>
 
         <button className="e40-submit">Save Rule Item</button>
       </form>
@@ -2406,6 +2615,7 @@ function CashOffModal({ name, close, save }: any) {
     <ModalShell
       title="Adjust Cash Off"
       subtitle={`${name} — positive adds credit, negative removes credit.`}
+      helpTopic="cashoff-adjustment"
       close={close}
     >
       <form
@@ -2468,6 +2678,7 @@ function UserModal({ data, close, addSpins, adjustCashOff }: any) {
         identity?.primary_email ||
         player.email
       }
+      helpTopic="user-details"
       close={close}
     >
       <div className="e40-user-summary">
