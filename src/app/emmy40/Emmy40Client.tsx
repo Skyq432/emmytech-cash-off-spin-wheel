@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AdminHelpProvider, HelpButton, type HelpKey } from "./AdminHelp";
 
 type Tab =
@@ -21,15 +21,15 @@ type ModalState =
   | { type: "user"; playerId: string }
   | null;
 
-const tabs: Array<{ id: Tab; label: string; short: string }> = [
-  { id: "overview", label: "Overview", short: "OV" },
-  { id: "operations", label: "Reward Operations", short: "RO" },
-  { id: "prizes", label: "Wheel Prizes", short: "WP" },
-  { id: "rules", label: "Spin Rules", short: "SR" },
-  { id: "claims", label: "Prize Claims", short: "PC" },
-  { id: "cashoff", label: "Cash Off", short: "CO" },
-  { id: "users", label: "User Database", short: "UD" },
-  { id: "logs", label: "Audit Logs", short: "AL" },
+const tabs: Array<{ id: Tab; label: string; group: "core" | "setup" | "records" }> = [
+  { id: "overview", label: "Overview", group: "core" },
+  { id: "operations", label: "Reward Operations", group: "core" },
+  { id: "prizes", label: "Wheel Prizes", group: "setup" },
+  { id: "rules", label: "Spin Rules", group: "setup" },
+  { id: "claims", label: "Prize Claims", group: "records" },
+  { id: "cashoff", label: "Cash Off", group: "records" },
+  { id: "users", label: "User Database", group: "records" },
+  { id: "logs", label: "Audit Logs", group: "records" },
 ];
 
 const tabTitles: Record<Tab, string> = {
@@ -42,6 +42,91 @@ const tabTitles: Record<Tab, string> = {
   users: "User Database",
   logs: "Audit Logs",
 };
+
+function NavIcon({ tab }: { tab: Tab }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (tab) {
+    case "overview":
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="6" height="6" rx="1.2" />
+          <rect x="14" y="4" width="6" height="6" rx="1.2" />
+          <rect x="4" y="14" width="6" height="6" rx="1.2" />
+          <rect x="14" y="14" width="6" height="6" rx="1.2" />
+        </svg>
+      );
+    case "operations":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="7" />
+          <circle cx="12" cy="12" r="2.5" />
+        </svg>
+      );
+    case "prizes":
+      return (
+        <svg {...common}>
+          <path d="M12 4v16" />
+          <path d="M4 12h16" />
+          <path d="M6.5 6.5l11 11" />
+          <path d="M17.5 6.5l-11 11" />
+        </svg>
+      );
+    case "rules":
+      return (
+        <svg {...common}>
+          <path d="M7 6h10" />
+          <path d="M7 12h10" />
+          <path d="M7 18h10" />
+          <circle cx="5" cy="6" r="1" fill="currentColor" stroke="none" />
+          <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="5" cy="18" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "claims":
+      return (
+        <svg {...common}>
+          <path d="M7 4h8l4 4v12H7z" />
+          <path d="M15 4v4h4" />
+          <path d="M10 12h6" />
+          <path d="M10 16h4" />
+        </svg>
+      );
+    case "cashoff":
+      return (
+        <svg {...common}>
+          <path d="M8 5h7a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7" />
+          <path d="M12 3v18" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...common}>
+          <path d="M16 19a4 4 0 0 0-8 0" />
+          <circle cx="12" cy="10" r="3" />
+          <path d="M6 18a3.5 3.5 0 0 0-2.5-3.4" />
+          <path d="M18 18a3.5 3.5 0 0 1 2.5-3.4" />
+        </svg>
+      );
+    case "logs":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 8v5l3 2" />
+        </svg>
+      );
+  }
+}
 
 function formatMoney(value: unknown) {
   return `₦${Number(value || 0).toLocaleString("en-NG", {
@@ -434,24 +519,40 @@ export default function Emmy40Client() {
           <small>Panel Active</small>
         </div>
 
+        <div className="e40-sidebar-search" aria-hidden="true">
+          <span>⌕</span>
+          <input type="text" value="Quick search" readOnly tabIndex={-1} />
+        </div>
+
         <nav className="e40-nav">
-          <p className="e40-nav-label">Navigation</p>
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              className={tab === item.id ? "active" : ""}
-              onClick={() => switchTab(item.id)}
-              aria-label={item.label}
-              title={item.label}
-            >
-              <i className="e40-nav-badge" aria-hidden="true">{item.short}</i>
-              <span>{item.label}</span>
-            </button>
+          {tabs.map((item, index) => (
+            <Fragment key={item.id}>
+              {index > 0 && tabs[index - 1]?.group !== item.group && (
+                <div className="e40-nav-divider" aria-hidden="true" />
+              )}
+              <button
+                className={tab === item.id ? "active" : ""}
+                onClick={() => switchTab(item.id)}
+                aria-label={item.label}
+                title={item.label}
+              >
+                <i className="e40-nav-icon"><NavIcon tab={item.id} /></i>
+                <span>{item.label}</span>
+              </button>
+            </Fragment>
           ))}
         </nav>
 
+        <div className="e40-sidebar-user">
+          <div className="e40-sidebar-avatar">E</div>
+          <div>
+            <strong>{username}</strong>
+            <span>Control panel</span>
+          </div>
+        </div>
+
         <button className="e40-logout" onClick={logout} title="Logout">
-          <i aria-hidden="true">⏻</i>
+          <i aria-hidden="true">↗</i>
           <span>Logout</span>
         </button>
       </aside>
@@ -2330,9 +2431,7 @@ function PrizeModal({ record, close, save }: any) {
           </div>
         </details>
 
-        <div className="e40-modal-footer">
-          <button className="e40-submit">Save Prize</button>
-        </div>
+        <button className="e40-submit">Save Prize</button>
       </form>
     </ModalShell>
   );
@@ -2467,9 +2566,7 @@ function GroupModal({ record, close, save }: any) {
           </div>
         </details>
 
-        <div className="e40-modal-footer">
-          <button className="e40-submit">Save Rule Group</button>
-        </div>
+        <button className="e40-submit">Save Rule Group</button>
       </form>
     </ModalShell>
   );
@@ -2654,9 +2751,7 @@ function ItemModal({ record, groups, close, save }: any) {
           </div>
         </details>
 
-        <div className="e40-modal-footer">
-          <button className="e40-submit">Save Rule Item</button>
-        </div>
+        <button className="e40-submit">Save Rule Item</button>
       </form>
     </ModalShell>
   );
@@ -2703,9 +2798,7 @@ function CashOffModal({ name, close, save }: any) {
           Every adjustment creates an immutable Cash Off transaction.
         </div>
 
-        <div className="e40-modal-footer">
-          <button className="e40-submit">Apply Adjustment</button>
-        </div>
+        <button className="e40-submit">Apply Adjustment</button>
       </form>
     </ModalShell>
   );
