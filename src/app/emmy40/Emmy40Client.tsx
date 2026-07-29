@@ -21,15 +21,15 @@ type ModalState =
   | { type: "user"; playerId: string }
   | null;
 
-const tabs: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: "overview", label: "Overview", icon: "▦" },
-  { id: "operations", label: "Reward Operations", icon: "◎" },
-  { id: "prizes", label: "Wheel Prizes", icon: "✹" },
-  { id: "rules", label: "Spin Rules", icon: "☷" },
-  { id: "claims", label: "Prize Claims", icon: "▣" },
-  { id: "cashoff", label: "Cash Off", icon: "₦" },
-  { id: "users", label: "User Database", icon: "♟" },
-  { id: "logs", label: "Audit Logs", icon: "◷" },
+const tabs: Array<{ id: Tab; label: string; short: string }> = [
+  { id: "overview", label: "Overview", short: "OV" },
+  { id: "operations", label: "Reward Operations", short: "RO" },
+  { id: "prizes", label: "Wheel Prizes", short: "WP" },
+  { id: "rules", label: "Spin Rules", short: "SR" },
+  { id: "claims", label: "Prize Claims", short: "PC" },
+  { id: "cashoff", label: "Cash Off", short: "CO" },
+  { id: "users", label: "User Database", short: "UD" },
+  { id: "logs", label: "Audit Logs", short: "AL" },
 ];
 
 const tabTitles: Record<Tab, string> = {
@@ -435,6 +435,7 @@ export default function Emmy40Client() {
         </div>
 
         <nav className="e40-nav">
+          <p className="e40-nav-label">Navigation</p>
           {tabs.map((item) => (
             <button
               key={item.id}
@@ -443,7 +444,7 @@ export default function Emmy40Client() {
               aria-label={item.label}
               title={item.label}
             >
-              <i>{item.icon}</i>
+              <i className="e40-nav-badge" aria-hidden="true">{item.short}</i>
               <span>{item.label}</span>
             </button>
           ))}
