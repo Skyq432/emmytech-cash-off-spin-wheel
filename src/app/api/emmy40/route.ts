@@ -1,10 +1,11 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
-const DEFAULT_PASSWORD = "2025";
-const ADMIN_PASSWORD_KEYS = [
+const ADMIN_PASSWORD_HASH_KEY = "EMMY40_ADMIN_PASSWORD_SHA256";
+const LEGACY_ADMIN_PASSWORD_KEYS = [
   "EMMY40_ADMIN_PASSWORD",
   "ADMIN_MASTER_PASSWORD",
   "MASTER_PASSWORD",
@@ -16,20 +17,47 @@ const MAX_ROWS = 5000;
 type Row = Record<string, any>;
 type SafeRowsResult = { rows: Row[]; warning: string | null };
 
-function expectedAdminPassword() {
-  for (const key of ADMIN_PASSWORD_KEYS) {
-    const configured = process.env[key];
-    if (typeof configured === "string" && configured.length > 0) {
-      return configured;
-    }
-  }
+function passwordHash(value: string) {
+  return createHash("sha256").update(value, "utf8").digest();
+}
 
-  return DEFAULT_PASSWORD;
+function safePasswordMatch(supplied: string, expected: string) {
+  return timingSafeEqual(
+    passwordHash(supplied),
+    passwordHash(expected)
+  );
+}
+
+function configuredPasswordHash() {
+  const value = process.env[ADMIN_PASSWORD_HASH_KEY]?.trim().toLowerCase();
+  return value && /^[a-f0-9]{64}$/.test(value) ? value : "";
 }
 
 function authorized(req: NextRequest) {
   const supplied = req.headers.get("x-emmy40-password") || "";
-  return supplied.length > 0 && supplied === expectedAdminPassword();
+  if (!supplied) return false;
+
+  const expectedHash = configuredPasswordHash();
+
+  if (expectedHash) {
+    return timingSafeEqual(
+      passwordHash(supplied),
+      Buffer.from(expectedHash, "hex")
+    );
+  }
+
+  for (const key of LEGACY_ADMIN_PASSWORD_KEYS) {
+    const configured = process.env[key];
+    if (
+      typeof configured === "string" &&
+      configured.length > 0 &&
+      safePasswordMatch(supplied, configured)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function deny() {
