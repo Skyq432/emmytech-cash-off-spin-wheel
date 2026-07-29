@@ -519,11 +519,6 @@ export default function Emmy40Client() {
           <small>Panel Active</small>
         </div>
 
-        <div className="e40-sidebar-search" aria-hidden="true">
-          <span>⌕</span>
-          <input type="text" value="Quick search" readOnly tabIndex={-1} />
-        </div>
-
         <nav className="e40-nav">
           {tabs.map((item, index) => (
             <Fragment key={item.id}>
@@ -534,7 +529,7 @@ export default function Emmy40Client() {
                 className={tab === item.id ? "active" : ""}
                 onClick={() => switchTab(item.id)}
                 aria-label={item.label}
-                title={item.label}
+                title={sidebarCollapsed ? item.label : undefined}
               >
                 <i className="e40-nav-icon"><NavIcon tab={item.id} /></i>
                 <span>{item.label}</span>
@@ -543,18 +538,24 @@ export default function Emmy40Client() {
           ))}
         </nav>
 
-        <div className="e40-sidebar-user">
-          <div className="e40-sidebar-avatar">E</div>
-          <div>
-            <strong>{username}</strong>
-            <span>Control panel</span>
+        <div className="e40-sidebar-footer">
+          <div className="e40-sidebar-user" aria-label="Signed in admin">
+            <div className="e40-sidebar-avatar">E</div>
+            <div>
+              <strong>{username}</strong>
+              <span>Admin</span>
+            </div>
           </div>
-        </div>
 
-        <button className="e40-logout" onClick={logout} title="Logout">
-          <i aria-hidden="true">↗</i>
-          <span>Logout</span>
-        </button>
+          <button
+            className="e40-logout"
+            onClick={logout}
+            aria-label="Logout"
+            title="Logout"
+          >
+            <i aria-hidden="true">↗</i>
+          </button>
+        </div>
       </aside>
 
       {mobileNav && (

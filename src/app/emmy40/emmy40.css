@@ -245,7 +245,7 @@
   width: var(--e40-sidebar-expanded);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: 18px 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 28px;
@@ -260,7 +260,7 @@
 }
 
 .e40-brand {
-  padding: 4px 4px 2px;
+  padding: 4px 4px 0;
 }
 
 .e40-brand-row {
@@ -329,8 +329,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-top: 14px;
-  padding: 7px 11px;
+  margin-top: 12px;
+  padding: 6px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(235, 243, 255, 0.82);
@@ -380,8 +380,23 @@
 .e40-nav {
   display: grid;
   gap: 6px;
-  padding: 6px 0;
+  padding: 8px 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(78, 121, 203, 0.65) transparent;
+}
+
+.e40-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.e40-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.e40-nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(78, 121, 203, 0.6);
 }
 
 .e40-nav-divider {
@@ -430,17 +445,28 @@
   display: block;
 }
 
+.e40-sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
 .e40-sidebar-user {
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin: auto 4px 0;
-  padding-top: 12px;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .e40-sidebar-avatar {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -454,40 +480,39 @@
 .e40-sidebar-user strong {
   display: block;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.15;
 }
 
 .e40-sidebar-user span {
   display: block;
   margin-top: 2px;
-  color: rgba(225, 233, 247, 0.68);
-  font-size: 11px;
+  color: rgba(225, 233, 247, 0.58);
+  font-size: 10px;
 }
 
 .e40-logout {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 4px 4px 0;
-  padding: 0 12px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
   border: 0;
   border-radius: 14px;
-  background: transparent;
-  color: rgba(245, 246, 252, 0.84);
-  font-size: 13px;
-  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(245, 246, 252, 0.9);
 }
 
 .e40-logout:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .e40-logout i {
-  width: 22px;
+  width: auto;
   display: grid;
   place-items: center;
+  font-size: 17px;
   font-style: normal;
 }
 
@@ -504,11 +529,9 @@
 
 .e40-app.sidebar-collapsed .e40-brand-copy,
 .e40-app.sidebar-collapsed .e40-brand small,
-.e40-app.sidebar-collapsed .e40-sidebar-search,
 .e40-app.sidebar-collapsed .e40-nav-divider,
 .e40-app.sidebar-collapsed .e40-sidebar nav button span,
-.e40-app.sidebar-collapsed .e40-sidebar-user div,
-.e40-app.sidebar-collapsed .e40-logout span {
+.e40-app.sidebar-collapsed .e40-sidebar-user div {
   display: none;
 }
 
@@ -518,13 +541,20 @@
 
 .e40-app.sidebar-collapsed .e40-brand-row,
 .e40-app.sidebar-collapsed .e40-sidebar-user,
-.e40-app.sidebar-collapsed .e40-logout {
+.e40-app.sidebar-collapsed .e40-sidebar-footer {
   justify-content: center;
 }
 
 .e40-app.sidebar-collapsed .e40-sidebar nav button {
   justify-content: center;
   padding-inline: 0;
+}
+
+.e40-app.sidebar-collapsed .e40-sidebar-user {
+  width: 42px;
+  flex: 0 0 auto;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .e40-app.sidebar-collapsed .e40-sidebar-toggle {
@@ -2272,11 +2302,9 @@
 
   .e40-app.sidebar-collapsed .e40-brand-copy,
   .e40-app.sidebar-collapsed .e40-brand small,
-  .e40-app.sidebar-collapsed .e40-sidebar-search,
   .e40-app.sidebar-collapsed .e40-nav-divider,
   .e40-app.sidebar-collapsed .e40-sidebar nav button span,
-  .e40-app.sidebar-collapsed .e40-sidebar-user div,
-  .e40-app.sidebar-collapsed .e40-logout span {
+  .e40-app.sidebar-collapsed .e40-sidebar-user div {
     display: initial;
   }
 
@@ -2291,10 +2319,13 @@
     height: 36px;
   }
 
-  .e40-app.sidebar-collapsed .e40-sidebar nav button,
-  .e40-app.sidebar-collapsed .e40-logout {
+  .e40-app.sidebar-collapsed .e40-sidebar nav button {
     justify-content: flex-start;
     padding-inline: 14px;
+  }
+
+  .e40-app.sidebar-collapsed .e40-sidebar-footer {
+    justify-content: space-between;
   }
 
   .e40-menu {
