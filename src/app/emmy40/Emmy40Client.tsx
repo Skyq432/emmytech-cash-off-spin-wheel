@@ -81,6 +81,7 @@ export default function Emmy40Client() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [tab, setTab] = useState<Tab>("overview");
   const [mobileNav, setMobileNav] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -243,6 +244,21 @@ export default function Emmy40Client() {
   }
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const saved = window.localStorage.getItem("emmy40-sidebar-collapsed");
+    setSidebarCollapsed(saved === "true");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "emmy40-sidebar-collapsed",
+      String(sidebarCollapsed)
+    );
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
     if (loggedIn) loadSection(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn, tab]);
@@ -330,6 +346,15 @@ export default function Emmy40Client() {
     );
   }, [data, selectedGroupId, tab]);
 
+  function switchTab(nextTab: Tab) {
+    setLoading(true);
+    setData(null);
+    setError("");
+    setNotice("");
+    setTab(nextTab);
+    setMobileNav(false);
+  }
+
   function logout() {
     setLoggedIn(false);
     setSessionPassword("");
@@ -381,28 +406,42 @@ export default function Emmy40Client() {
 
   return (
     <AdminHelpProvider>
-      <div className="e40-app">
-      <aside className={`e40-sidebar ${mobileNav ? "open" : ""}`}>
+      <div
+        className={`e40-app ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+      >
+      <aside
+        className={`e40-sidebar ${mobileNav ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
+      >
         <div className="e40-brand">
-          <strong>
-            EMMY<span>TECH</span>
-          </strong>
+          <div className="e40-brand-row">
+            <div className="e40-brand-mark" aria-hidden="true">E</div>
+            <div className="e40-brand-copy">
+              <strong>
+                EMMY<span>TECH</span>
+              </strong>
+              <span>Spin Admin</span>
+            </div>
+            <button
+              type="button"
+              className="e40-sidebar-toggle"
+              aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              onClick={() => setSidebarCollapsed((current) => !current)}
+            >
+              {sidebarCollapsed ? "›" : "‹"}
+            </button>
+          </div>
           <small>Panel Active</small>
         </div>
 
-        <nav>
+        <nav className="e40-nav">
           {tabs.map((item) => (
             <button
               key={item.id}
               className={tab === item.id ? "active" : ""}
-              onClick={() => {
-                setLoading(true);
-                setData(null);
-                setError("");
-                setNotice("");
-                setTab(item.id);
-                setMobileNav(false);
-              }}
+              onClick={() => switchTab(item.id)}
+              aria-label={item.label}
+              title={item.label}
             >
               <i>{item.icon}</i>
               <span>{item.label}</span>
@@ -410,8 +449,9 @@ export default function Emmy40Client() {
           ))}
         </nav>
 
-        <button className="e40-logout" onClick={logout}>
-          ⏻ Logout
+        <button className="e40-logout" onClick={logout} title="Logout">
+          <i aria-hidden="true">⏻</i>
+          <span>Logout</span>
         </button>
       </aside>
 
@@ -432,6 +472,14 @@ export default function Emmy40Client() {
               aria-label="Open menu"
             >
               ☰
+            </button>
+            <button
+              className="e40-collapse-trigger"
+              onClick={() => setSidebarCollapsed((current) => !current)}
+              aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            >
+              {sidebarCollapsed ? "›" : "‹"}
             </button>
             <h1>{tabTitles[tab]}</h1>
           </div>
