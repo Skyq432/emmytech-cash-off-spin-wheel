@@ -4,16 +4,32 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PASSWORD = "2025";
+const ADMIN_PASSWORD_KEYS = [
+  "EMMY40_ADMIN_PASSWORD",
+  "ADMIN_MASTER_PASSWORD",
+  "MASTER_PASSWORD",
+  "ADMIN_PASSWORD",
+] as const;
 const db: any = supabaseAdmin;
 const MAX_ROWS = 5000;
 
 type Row = Record<string, any>;
 type SafeRowsResult = { rows: Row[]; warning: string | null };
 
+function expectedAdminPassword() {
+  for (const key of ADMIN_PASSWORD_KEYS) {
+    const configured = process.env[key];
+    if (typeof configured === "string" && configured.length > 0) {
+      return configured;
+    }
+  }
+
+  return DEFAULT_PASSWORD;
+}
+
 function authorized(req: NextRequest) {
   const supplied = req.headers.get("x-emmy40-password") || "";
-  const expected = process.env.EMMY40_ADMIN_PASSWORD || DEFAULT_PASSWORD;
-  return supplied.length > 0 && supplied === expected;
+  return supplied.length > 0 && supplied === expectedAdminPassword();
 }
 
 function deny() {

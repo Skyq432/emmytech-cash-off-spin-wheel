@@ -2330,7 +2330,9 @@ function PrizeModal({ record, close, save }: any) {
           </div>
         </details>
 
-        <button className="e40-submit">Save Prize</button>
+        <div className="e40-modal-footer">
+          <button className="e40-submit">Save Prize</button>
+        </div>
       </form>
     </ModalShell>
   );
@@ -2465,7 +2467,9 @@ function GroupModal({ record, close, save }: any) {
           </div>
         </details>
 
-        <button className="e40-submit">Save Rule Group</button>
+        <div className="e40-modal-footer">
+          <button className="e40-submit">Save Rule Group</button>
+        </div>
       </form>
     </ModalShell>
   );
@@ -2650,7 +2654,9 @@ function ItemModal({ record, groups, close, save }: any) {
           </div>
         </details>
 
-        <button className="e40-submit">Save Rule Item</button>
+        <div className="e40-modal-footer">
+          <button className="e40-submit">Save Rule Item</button>
+        </div>
       </form>
     </ModalShell>
   );
@@ -2697,7 +2703,9 @@ function CashOffModal({ name, close, save }: any) {
           Every adjustment creates an immutable Cash Off transaction.
         </div>
 
-        <button className="e40-submit">Apply Adjustment</button>
+        <div className="e40-modal-footer">
+          <button className="e40-submit">Apply Adjustment</button>
+        </div>
       </form>
     </ModalShell>
   );
