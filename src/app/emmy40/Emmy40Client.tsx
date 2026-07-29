@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Tab =
   | "overview"
+  | "operations"
   | "prizes"
   | "rules"
   | "claims"
@@ -21,6 +22,7 @@ type ModalState =
 
 const tabs: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "▦" },
+  { id: "operations", label: "Reward Operations", icon: "◎" },
   { id: "prizes", label: "Wheel Prizes", icon: "✹" },
   { id: "rules", label: "Spin Rules", icon: "☷" },
   { id: "claims", label: "Prize Claims", icon: "▣" },
@@ -31,6 +33,7 @@ const tabs: Array<{ id: Tab; label: string; icon: string }> = [
 
 const tabTitles: Record<Tab, string> = {
   overview: "Campaign Overview",
+  operations: "Reward Operations",
   prizes: "Wheel Prizes",
   rules: "Hybrid Spin Setup",
   claims: "Prize Claims",
@@ -87,6 +90,8 @@ export default function Emmy40Client() {
   const [search, setSearch] = useState("");
   const [claimStatus, setClaimStatus] = useState("all");
   const [logType, setLogType] = useState("all");
+  const [operationStatus, setOperationStatus] = useState("all");
+  const [operationPage, setOperationPage] = useState(1);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [from, setFrom] = useState(() => {
     const date = new Date();
@@ -182,7 +187,11 @@ export default function Emmy40Client() {
     }
   }
 
-  async function loadSection(nextTab: Tab = tab, force = false) {
+  async function loadSection(
+    nextTab: Tab = tab,
+    force = false,
+    overrides?: { operationStatus?: string; operationPage?: number }
+  ) {
     try {
       let params: Record<string, string> = {};
 
@@ -195,6 +204,11 @@ export default function Emmy40Client() {
 
       if (nextTab === "users" && search.trim()) {
         params.q = search.trim();
+      }
+
+      if (nextTab === "operations") {
+        params.status = overrides?.operationStatus ?? operationStatus;
+        params.page = String(overrides?.operationPage ?? operationPage);
       }
 
       if (nextTab === "claims") params.status = claimStatus;
@@ -457,6 +471,34 @@ export default function Emmy40Client() {
             />
           )}
 
+          {!loading && tab === "operations" && (
+            <RewardOperations
+              data={data}
+              status={operationStatus}
+              setStatus={setOperationStatus}
+              refresh={() => {
+                setOperationPage(1);
+                loadSection("operations", true, {
+                  operationStatus,
+                  operationPage: 1,
+                });
+              }}
+              changePage={(nextPage: number) => {
+                setOperationPage(nextPage);
+                loadSection("operations", true, {
+                  operationStatus,
+                  operationPage: nextPage,
+                });
+              }}
+              updateCashout={(id: string, status: string, note: string) =>
+                action(
+                  { action: "cashout_status", id, status, note },
+                  `Cashout marked ${status}.`
+                )
+              }
+            />
+          )}
+
           {!loading && tab === "prizes" && (
             <Prizes
               rows={Array.isArray(data) ? data : []}
@@ -707,6 +749,32 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
         />
       </div>
 
+      <div className="e40-stats e40-stats-operations">
+        <Stat
+          title="Active Cash Challenges"
+          value={metrics.activeChallenges || 0}
+          icon="◷"
+        />
+        <Stat
+          title="Cash Payout Due"
+          value={formatMoney(metrics.cashPayoutDue)}
+          icon="₦"
+        />
+        <Stat
+          title="Daily Spins Ready"
+          value={metrics.dailySpinReady || 0}
+          icon="↻"
+        />
+        <Stat
+          title="Bonus Spins Awarded"
+          value={
+            Number(metrics.referralBonusSpins || 0) +
+            Number(metrics.shareBonusSpins || 0)
+          }
+          icon="+"
+        />
+      </div>
+
       <div className="e40-overview-grid">
         <section className="e40-card e40-trend-card">
           <div className="e40-card-title">
@@ -828,6 +896,350 @@ function Overview({ data, from, to, setFrom, setTo, refresh }: any) {
         </section>
       </div>
     </>
+  );
+}
+
+function RewardOperations({
+  data,
+  status,
+  setStatus,
+  refresh,
+  changePage,
+  updateCashout,
+}: any) {
+  const metrics = data?.metrics || {};
+  const challenges = data?.challenges || [];
+  const cashouts = data?.cashouts || [];
+  const topReferrers = data?.topReferrers || [];
+  const recentBonuses = data?.recentBonuses || [];
+  const pagination = data?.challengePagination || {
+    page: 1,
+    pageCount: 1,
+    total: 0,
+  };
+  const deployment = data?.deployment || {};
+
+  function changeCashout(item: any, nextStatus: string) {
+    if (
+      !window.confirm(
+        `Mark this ${formatMoney(item.amount)} cashout as ${nextStatus}?`
+      )
+    ) {
+      return;
+    }
+
+    const note =
+      window.prompt(
+        "Add an admin note for the audit trail (recommended):",
+        ""
+      ) || "";
+    updateCashout(item.id, nextStatus, note);
+  }
+
+  return (
+    <>
+      <SectionHeader
+        eyebrow="Live reward controls"
+        title="Reward Operations"
+        description="Track Cash Challenges, payout decisions, daily spins and the referral loop from one place."
+      />
+
+      <div className="e40-deployment-grid">
+        <DeploymentState
+          ready={deployment.dailyEntitlement}
+          title="Daily-spin entitlement"
+          description={
+            deployment.dailyEntitlement
+              ? "Tracking is available in this database."
+              : "The daily-spin migration is not deployed here yet."
+          }
+        />
+        <DeploymentState
+          ready={deployment.shareBonus}
+          title="Share bonus"
+          description={
+            deployment.shareBonus
+              ? "Share claims are being read from the reward ledger."
+              : "The share-bonus table is not deployed here yet."
+          }
+        />
+        <DeploymentState
+          ready={deployment.referralOpenTracking}
+          pending={!deployment.referralOpenTracking}
+          title="Referral link visits"
+          description={
+            deployment.referralOpenTracking
+              ? "Unique browser visits are now arriving."
+              : "Ready; waiting for the first tracked referral visit."
+          }
+        />
+        <DeploymentState
+          ready={deployment.guideTracking}
+          pending={!deployment.guideTracking}
+          title="Reward guide funnel"
+          description={
+            deployment.guideTracking
+              ? "Started, completed and skipped events are available."
+              : "Ready; waiting for the first guided spin."
+          }
+        />
+      </div>
+
+      <div className="e40-stats e40-operation-stats">
+        <Stat
+          title="Active Challenges"
+          value={metrics.activeChallenges || 0}
+          icon="◷"
+        />
+        <Stat
+          title="Challenge Cash"
+          value={formatMoney(metrics.activeChallengeCash)}
+          icon="₦"
+        />
+        <Stat
+          title="Cash Payout Due"
+          value={formatMoney(metrics.cashPayoutDue)}
+          icon="!"
+        />
+        <Stat
+          title="Pending Cashouts"
+          value={metrics.pendingCashouts || 0}
+          icon="▣"
+        />
+        <Stat
+          title="Converted to Cash Off"
+          value={formatMoney(metrics.convertedCashOff)}
+          icon="↔"
+        />
+        <Stat
+          title="Daily Spins Ready"
+          value={metrics.dailySpinReady || 0}
+          icon="↻"
+        />
+      </div>
+
+      <div className="e40-grid-3 e40-funnel-grid">
+        <section className="e40-card e40-funnel-card">
+          <small>Referral funnel</small>
+          <h3>{Number(metrics.referralConversionRate || 0).toFixed(1)}%</h3>
+          <p>Tracked visits that became registered referrals.</p>
+          <div>
+            <span>{metrics.referralLinkOpens || 0} visits</span>
+            <strong>{metrics.referralRegistrations || 0} registrations</strong>
+          </div>
+        </section>
+        <section className="e40-card e40-funnel-card">
+          <small>Bonus-spin ledger</small>
+          <h3>
+            {Number(metrics.referralBonusSpins || 0) +
+              Number(metrics.shareBonusSpins || 0)}
+          </h3>
+          <p>Spins awarded through growth actions.</p>
+          <div>
+            <span>{metrics.referralBonusSpins || 0} referral</span>
+            <strong>{metrics.shareBonusSpins || 0} share</strong>
+          </div>
+        </section>
+        <section className="e40-card e40-funnel-card">
+          <small>Reward education</small>
+          <h3>{Number(metrics.guideCompletionRate || 0).toFixed(1)}%</h3>
+          <p>New players who completed the reward guide.</p>
+          <div>
+            <span>{metrics.guideStarted || 0} started</span>
+            <strong>{metrics.guideSkipped || 0} skipped</strong>
+          </div>
+        </section>
+      </div>
+
+      <section className="e40-toolbar e40-operation-toolbar">
+        <div>
+          <strong>Cash Challenge queue</strong>
+          <span>{pagination.total || 0} matching challenges</span>
+        </div>
+        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="all">All challenge statuses</option>
+          <option value="active">Active</option>
+          <option value="cash_eligible">Cash eligible</option>
+          <option value="converted_to_cash_off">Converted to Cash Off</option>
+          <option value="closed">Closed</option>
+        </select>
+        <button onClick={refresh}>Apply Filter</button>
+      </section>
+
+      <section className="e40-card">
+        <div className="e40-table-wrap">
+          <table className="e40-operation-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Target</th>
+                <th>Expires / processed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {challenges.map((item: any) => {
+                const balance = Number(item.cash_balance || 0);
+                const target = Math.max(1, Number(item.cash_target || 1000));
+                return (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.player_name}</strong>
+                      <small>{item.player_phone || item.player?.referral_code}</small>
+                    </td>
+                    <td><Status value={item.status} /></td>
+                    <td>
+                      <strong>{formatMoney(balance)}</strong>
+                      <div className="e40-mini-progress">
+                        <span
+                          style={{ width: `${Math.min(100, (balance / target) * 100)}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td>{formatMoney(target)}</td>
+                    <td>{formatDate(item.processed_at || item.expires_at)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!challenges.length && <Empty text="No Cash Challenges match this filter." />}
+        </div>
+
+        <div className="e40-pagination">
+          <button
+            disabled={pagination.page <= 1}
+            onClick={() => changePage(pagination.page - 1)}
+          >
+            Previous
+          </button>
+          <span>Page {pagination.page} of {pagination.pageCount}</span>
+          <button
+            disabled={pagination.page >= pagination.pageCount}
+            onClick={() => changePage(pagination.page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </section>
+
+      <div className="e40-grid-2 e40-operations-split">
+        <section className="e40-card">
+          <div className="e40-card-title">
+            <div>
+              <small>Payout decisions</small>
+              <h3>Cashout Requests</h3>
+            </div>
+            <span className="e40-chart-total">
+              {formatMoney(metrics.pendingCashoutAmount)} pending
+            </span>
+          </div>
+
+          <div className="e40-cashout-list">
+            {cashouts.map((item: any) => (
+              <article key={item.id}>
+                <span>
+                  <strong>{item.player_name}</strong>
+                  <small>{formatDate(item.requested_at || item.created_at)}</small>
+                </span>
+                <b>{formatMoney(item.amount)}</b>
+                <Status value={item.status} />
+                <div>
+                  {item.status !== "paid" && (
+                    <button onClick={() => changeCashout(item, "paid")}>Mark paid</button>
+                  )}
+                  {item.status !== "rejected" && (
+                    <button
+                      className="danger"
+                      onClick={() => changeCashout(item, "rejected")}
+                    >
+                      Reject
+                    </button>
+                  )}
+                  {item.status !== "pending" && (
+                    <button onClick={() => changeCashout(item, "pending")}>Reopen</button>
+                  )}
+                </div>
+              </article>
+            ))}
+            {!cashouts.length && <Empty text="No cashout requests have been recorded." />}
+          </div>
+        </section>
+
+        <section className="e40-card">
+          <div className="e40-card-title">
+            <div>
+              <small>Growth leaders</small>
+              <h3>Top Referrers</h3>
+            </div>
+          </div>
+
+          <div className="e40-referrer-list">
+            {topReferrers.map((item: any, index: number) => (
+              <article key={item.player_id}>
+                <i>{index + 1}</i>
+                <span>
+                  <strong>{item.name}</strong>
+                  <small>{item.referral_code || "No referral code"}</small>
+                </span>
+                <div>
+                  <b>{item.registrations}</b>
+                  <small>registered</small>
+                </div>
+                <div>
+                  <b>{item.link_opens}</b>
+                  <small>visits</small>
+                </div>
+                <div>
+                  <b>+{item.bonus_spins}</b>
+                  <small>spins</small>
+                </div>
+              </article>
+            ))}
+            {!topReferrers.length && <Empty text="No referral activity yet." />}
+          </div>
+        </section>
+      </div>
+
+      <section className="e40-card">
+        <div className="e40-card-title">
+          <div>
+            <small>Attribution ledger</small>
+            <h3>Recent Referral & Share Bonuses</h3>
+          </div>
+        </div>
+
+        <div className="e40-bonus-feed">
+          {recentBonuses.map((item: any) => (
+            <article key={`${item.bonus_type}-${item.id}`}>
+              <i>{item.bonus_type === "share" ? "↗" : "+"}</i>
+              <span>
+                <strong>{item.player_name}</strong>
+                <small>
+                  {item.bonus_type === "share" ? "Share bonus" : "Valid referral reward"}
+                  {" · "}{formatDate(item.created_at)}
+                </small>
+              </span>
+              <b>+{item.spins_awarded || 1} spin{Number(item.spins_awarded || 1) === 1 ? "" : "s"}</b>
+            </article>
+          ))}
+          {!recentBonuses.length && <Empty text="No bonus-spin awards found." />}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function DeploymentState({ ready, pending, title, description }: any) {
+  return (
+    <article className={`e40-deployment ${ready ? "ready" : pending ? "pending" : "missing"}`}>
+      <i>{ready ? "✓" : pending ? "•" : "!"}</i>
+      <span>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+    </article>
   );
 }
 
@@ -1476,6 +1888,8 @@ function Logs({ rows, resultType, setResultType, refresh }: any) {
                 <th>Type</th>
                 <th>Value</th>
                 <th>Mode</th>
+                <th>Rule / source</th>
+                <th>Challenge</th>
                 <th>Wallet</th>
                 <th>Cash Off</th>
                 <th>Date</th>
@@ -1492,6 +1906,22 @@ function Logs({ rows, resultType, setResultType, refresh }: any) {
                   <td>{formatMoney(item.cash_amount)}</td>
                   <td>
                     <Status value={item.reward_mode || "legacy_cash"} />
+                  </td>
+                  <td>
+                    <strong>{item.spin_rule_group_key || "legacy"}</strong>
+                    <small>{item.spin_rule_item_key || "—"}</small>
+                  </td>
+                  <td>
+                    {item.cash_challenge_id ? (
+                      <>
+                        <strong>+{formatMoney(item.cash_challenge_credit)}</strong>
+                        <small>
+                          Balance {formatMoney(item.cash_challenge_balance_after)}
+                        </small>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>
                     {formatMoney(item.wallet_before)} →{" "}
@@ -2018,6 +2448,9 @@ function UserModal({ data, close, addSpins, adjustCashOff }: any) {
   const player = data.player;
   const identity = data.identity;
   const account = data.cashOffAccount;
+  const activeChallenge = (data.challenges || []).find((item: any) =>
+    ["active", "cash_eligible"].includes(String(item.status || ""))
+  ) || data.challenges?.[0];
   const [spinAmount, setSpinAmount] = useState(1);
   const phone = cleanPhone(
     identity?.primary_phone || player.phone_number
@@ -2054,6 +2487,17 @@ function UserModal({ data, close, addSpins, adjustCashOff }: any) {
           value={data.prizes?.length || 0}
           icon="✦"
         />
+        <Stat
+          title="Daily Spin"
+          value={
+            data.deployment?.dailyEntitlement
+              ? player.daily_spin_available
+                ? "Ready"
+                : "Used"
+              : "Not deployed"
+          }
+          icon="◷"
+        />
       </div>
 
       <div className="e40-user-actions">
@@ -2074,6 +2518,96 @@ function UserModal({ data, close, addSpins, adjustCashOff }: any) {
           </a>
         )}
       </div>
+
+      <h3 className="e40-subheading">Cash Challenge</h3>
+      {activeChallenge ? (
+        <div className="e40-user-challenge">
+          <span>
+            <small>Current balance</small>
+            <strong>{formatMoney(activeChallenge.cash_balance)}</strong>
+          </span>
+          <span>
+            <small>Target</small>
+            <strong>{formatMoney(activeChallenge.cash_target)}</strong>
+          </span>
+          <span>
+            <small>Deadline</small>
+            <strong>{formatDate(activeChallenge.expires_at)}</strong>
+          </span>
+          <Status value={activeChallenge.status} />
+        </div>
+      ) : (
+        <Empty text="This player has not started a Cash Challenge." />
+      )}
+
+      {(data.challengeCredits || []).length > 0 && (
+        <div className="e40-detail-list e40-user-credit-list">
+          {data.challengeCredits.slice(0, 8).map((credit: any) => (
+            <article key={credit.id}>
+              <span>
+                <strong>Challenge credit</strong>
+                <small>{formatDate(credit.created_at)}</small>
+              </span>
+              <b>
+                +{formatMoney(credit.amount_credited)} · {formatMoney(credit.balance_after)} total
+              </b>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h3 className="e40-subheading">Growth & Guide Activity</h3>
+      <div className="e40-detail-list">
+        {(data.referralAwards || []).slice(0, 6).map((award: any) => (
+          <article key={`referral-${award.id}`}>
+            <span>
+              <strong>Referral bonus</strong>
+              <small>{formatDate(award.created_at)}</small>
+            </span>
+            <b>+{award.spins_awarded || 0} spins</b>
+          </article>
+        ))}
+        {(data.shareBonusClaims || []).slice(0, 6).map((claim: any) => (
+          <article key={`share-${claim.id}`}>
+            <span>
+              <strong>Share bonus</strong>
+              <small>{formatDate(claim.created_at)}</small>
+            </span>
+            <b>+1 spin</b>
+          </article>
+        ))}
+        {(data.guideEvents || []).slice(0, 6).map((event: any) => (
+          <article key={`guide-${event.id}`}>
+            <span>
+              <strong>{event.title || event.event_type}</strong>
+              <small>{formatDate(event.created_at)}</small>
+            </span>
+            <Status value={String(event.event_type || "").replace("spin_reward_guide_", "")} />
+          </article>
+        ))}
+        {!data.referralAwards?.length &&
+          !data.shareBonusClaims?.length &&
+          !data.guideEvents?.length && (
+            <Empty text="No referral, share or reward-guide events yet." />
+          )}
+      </div>
+
+      {(data.cashouts || []).length > 0 && (
+        <>
+          <h3 className="e40-subheading">Cashout History</h3>
+          <div className="e40-detail-list">
+            {data.cashouts.slice(0, 8).map((cashout: any) => (
+              <article key={cashout.id}>
+                <span>
+                  <strong>{formatMoney(cashout.amount)}</strong>
+                  <small>{formatDate(cashout.requested_at || cashout.created_at)}</small>
+                </span>
+                <Status value={cashout.status} />
+              </article>
+            ))}
+          </div>
+        </>
+      )}
 
       <h3 className="e40-subheading">Recent Spins</h3>
       <div className="e40-detail-list">

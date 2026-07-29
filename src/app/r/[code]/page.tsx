@@ -136,5 +136,10 @@ export default async function ReferralPage({ params }: PageProps) {
   const code = validReferralCode(rawCode);
   const destination = code ? `/?ref=${encodeURIComponent(code)}` : "/";
 
-  return <ReferralRedirect destination={destination} />;
+  return (
+    <ReferralRedirect
+      destination={destination}
+      referralCode={code}
+    />
+  );
 }

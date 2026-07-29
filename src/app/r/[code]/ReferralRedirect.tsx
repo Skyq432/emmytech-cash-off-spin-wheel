@@ -5,14 +5,49 @@ import { useRouter } from "next/navigation";
 
 type ReferralRedirectProps = {
   destination: string;
+  referralCode: string | null;
 };
 
-export default function ReferralRedirect({ destination }: ReferralRedirectProps) {
+export default function ReferralRedirect({
+  destination,
+  referralCode,
+}: ReferralRedirectProps) {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(destination);
-  }, [destination, router]);
+    if (!referralCode) {
+      router.replace(destination);
+      return;
+    }
+
+    const storageKey = "emmy_spin_visitor_id";
+    let visitorId = window.localStorage.getItem(storageKey);
+
+    if (!visitorId) {
+      visitorId = window.crypto.randomUUID();
+      window.localStorage.setItem(storageKey, visitorId);
+    }
+
+    let redirected = false;
+    const continueToWheel = () => {
+      if (redirected) return;
+      redirected = true;
+      router.replace(destination);
+    };
+    const fallbackTimer = window.setTimeout(continueToWheel, 350);
+
+    void fetch("/api/spin/referral-open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: referralCode, visitorId }),
+      keepalive: true,
+    }).finally(() => {
+      window.clearTimeout(fallbackTimer);
+      continueToWheel();
+    });
+
+    return () => window.clearTimeout(fallbackTimer);
+  }, [destination, referralCode, router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-center">

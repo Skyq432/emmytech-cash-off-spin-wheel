@@ -156,10 +156,13 @@ function referralHeadline(referrer: ReferrerInfo) {
 
   switch (referrer.prize_type) {
     case "cash":
+      return prize
+        ? `${referrer.name} won ${prize} Cash Off`
+        : `${referrer.name} invited you to Spin & Save`;
     case "prize":
       return prize
-        ? `${referrer.name} just won ${prize}!`
-        : `${referrer.name} invited you to spin!`;
+        ? `${referrer.name} won ${prize}`
+        : `${referrer.name} invited you to Spin & Save`;
     case "letter":
       return prize
         ? `${referrer.name} unlocked ${prize}!`
@@ -168,11 +171,11 @@ function referralHeadline(referrer: ReferrerInfo) {
     case "bonus_spin":
       return `${referrer.name} earned a bonus spin!`;
     case "retry":
-      return `${referrer.name} invited you to spin the EmmyTech wheel!`;
+      return `${referrer.name} invited you to Spin & Save`;
     default:
       return prize
-        ? `${referrer.name} just landed on ${prize}!`
-        : `${referrer.name} invited you to spin!`;
+        ? `${referrer.name} landed on ${prize}`
+        : `${referrer.name} invited you to Spin & Save`;
   }
 }
 
@@ -187,6 +190,8 @@ function haptic(style: "light" | "medium" | "heavy" = "medium") {
 
 export default function SpinWheelClient() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const guideBubbleRef = useRef<HTMLElement | null>(null);
+  const recordedGuideEventsRef = useRef<Set<string>>(new Set());
   const lastTickIdxRef = useRef(-1);
   const angleRef = useRef(0);
 
@@ -212,11 +217,23 @@ export default function SpinWheelClient() {
   const [showBag, setShowBag] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showRewardGuide, setShowRewardGuide] = useState(false);
+  const [rewardGuideStep, setRewardGuideStep] = useState(0);
+  const [rewardGuideCollapsed, setRewardGuideCollapsed] = useState(false);
+  const [progressExpanded, setProgressExpanded] = useState(false);
+  const [guidePosition, setGuidePosition] = useState({
+    top: 24,
+    left: 24,
+    placement: "from-left",
+    ready: false,
+  });
   const [shareCopied, setShareCopied] = useState(false);
   const [showOutOfSpins, setShowOutOfSpins] = useState(false);
 
   // CASH OFF NO-SPINS PREVIEW V2
   useEffect(() => {
+    if (!playerRestoreComplete) return;
+
     const preview = new URLSearchParams(window.location.search).get("preview");
     const previewTimer = window.setTimeout(() => {
       if (preview === "no-spins") {
@@ -232,10 +249,35 @@ export default function SpinWheelClient() {
           expires_at: new Date(Date.now() + 23 * 60 * 60 * 1000 + 47 * 60 * 1000).toISOString(),
         });
       }
+      if (preview === "reward-guide") {
+        setLastResult({
+          label: "₦100",
+          result_type: "cash",
+          cash_amount: 100,
+          cash_off_amount: 0,
+          letter_code: null,
+          bonus_spins: 0,
+          wallet_before: 0,
+          wallet_after: 100,
+          cash_off_before: 0,
+          cash_off_after: 0,
+          letter_challenge_completed: false,
+        });
+        setCashChallenge({
+          active: true,
+          cash_balance: 100,
+          cash_target: 1000,
+          conversion_floor: 700,
+          expires_at: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
+        });
+        setRewardGuideStep(0);
+        setRewardGuideCollapsed(false);
+        setShowRewardGuide(true);
+      }
     }, 0);
 
     return () => window.clearTimeout(previewTimer);
-  }, []);
+  }, [playerRestoreComplete]);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [lastResult, setLastResult] = useState<SpinResult | null>(null);
@@ -264,6 +306,12 @@ export default function SpinWheelClient() {
   }, []);
 
   useEffect(() => {
+    if (showRewardGuide) recordRewardGuideEvent("started");
+    // The event recorder deduplicates this lifecycle event per spin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRewardGuide, player?.id, lastResult?.spin_log_id]);
+
+  useEffect(() => {
     drawWheel(angleRef.current);
   }, [wheelItems]);
 
@@ -271,6 +319,12 @@ export default function SpinWheelClient() {
     const urlParams = new URLSearchParams(window.location.search);
     const refCode = urlParams.get("ref");
     const handoffToken = urlParams.get("handoff");
+    const preview = urlParams.get("preview");
+
+    if (preview) {
+      setPlayerRestoreComplete(true);
+      return;
+    }
 
     if (refCode) {
       localStorage.setItem("emmy_ref", refCode);
@@ -847,7 +901,8 @@ export default function SpinWheelClient() {
 
       if (claimedGuestResult) {
         setLastResult(claimedGuestResult);
-        setShowResult(true);
+        setRewardGuideStep(0);
+        setShowRewardGuide(true);
         showWinToast(data.spinPlayer.full_name || "You", claimedGuestResult.label);
       }
     } catch (error) {
@@ -863,6 +918,8 @@ export default function SpinWheelClient() {
 
     const activePlayer = player;
     const isGuestSpin = !activePlayer;
+    const isFirstPlayerSpin =
+      isGuestSpin || Number(activePlayer?.spin_sequence_step || 0) === 0;
 
     setSpinning(true);
     setLastResult(null);
@@ -989,7 +1046,12 @@ export default function SpinWheelClient() {
         }));
 
         setLastResult(result);
-        setShowResult(true);
+        if (isFirstPlayerSpin) {
+          setRewardGuideStep(0);
+          setShowRewardGuide(true);
+        } else {
+          setShowResult(true);
+        }
         setDrawerOpen(false);
         setSpinning(false);
 
@@ -1016,13 +1078,22 @@ export default function SpinWheelClient() {
     const prize = lastResult?.label || player?.last_prize_won || "my reward";
 
     if (lastResult?.result_type === "cash") {
+      const challengeBalance = Number(
+        cashChallenge?.cash_balance ?? lastResult.wallet_after ?? lastResult.cash_amount
+      );
+      const challengeTarget = Number(
+        cashChallenge?.cash_target || player?.cashout_target || 1000
+      );
+
       return (
         "Hello Emmy Technology, my name is " +
         firstName +
         ". I just won " +
         moneyFmt(lastResult.cash_amount) +
-        " Cash Off on the Spin Wheel. My available Cash Off is " +
-        moneyFmt(cashOffBalance) +
+        " Cash on the Spin Wheel. My 24-hour Cash Challenge progress is " +
+        moneyFmt(challengeBalance) +
+        " of " +
+        moneyFmt(challengeTarget) +
         "."
       );
     }
@@ -1265,11 +1336,248 @@ export default function SpinWheelClient() {
     return `${hours}h ${minutes}m`;
   }
 
+  function recordRewardGuideEvent(
+    event: "started" | "completed" | "skipped"
+  ) {
+    const spinPlayerId = player?.id;
+    const spinLogId = lastResult?.spin_log_id;
+    if (!spinPlayerId || !spinLogId) return;
+
+    const eventKey = `${spinLogId}:${event}`;
+    if (recordedGuideEventsRef.current.has(eventKey)) return;
+    recordedGuideEventsRef.current.add(eventKey);
+
+    void fetch("/api/spin/guide-event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ spinPlayerId, spinLogId, event }),
+      keepalive: true,
+    }).catch(() => {
+      recordedGuideEventsRef.current.delete(eventKey);
+    });
+  }
+
+  function finishRewardGuide(
+    outcome: "completed" | "skipped" = "skipped"
+  ) {
+    recordRewardGuideEvent(outcome);
+    setShowRewardGuide(false);
+    setRewardGuideStep(0);
+    setRewardGuideCollapsed(false);
+    if (lastResult) setShowResult(true);
+  }
+
+  function advanceRewardGuide() {
+    if (rewardGuideStep >= rewardGuideSlides.length - 1) {
+      finishRewardGuide("completed");
+      return;
+    }
+
+    const nextStep = rewardGuideStep + 1;
+    if (nextStep >= 1 && nextStep <= 3) setProgressExpanded(true);
+    setRewardGuideStep(nextStep);
+  }
+
+  function replayRewardGuide() {
+    setShowHelp(false);
+    setRewardGuideStep(0);
+    setRewardGuideCollapsed(false);
+    setShowRewardGuide(true);
+  }
+
+  const cashTarget = Math.max(
+    1,
+    Number(cashChallenge?.cash_target || player?.cashout_target || 1000)
+  );
+  const cashConversionFloor = Math.max(
+    0,
+    Number(cashChallenge?.conversion_floor || 700)
+  );
+  const cashChallengeBalance = Math.max(
+    0,
+    Number(
+      cashChallenge?.cash_balance ??
+        lastResult?.wallet_after ??
+        player?.wallet_balance ??
+        0
+    )
+  );
+  const cashProgressPercent = Math.min(
+    100,
+    Math.round((cashChallengeBalance / cashTarget) * 100)
+  );
+  const featuredPrizeName = cleanDisplayText(
+    wheelItems.find((item) => item.prize_type === "prize")?.label || "Laptop"
+  );
+  const starterCashReward =
+    lastResult?.result_type === "cash"
+      ? `${cleanDisplayText(lastResult.label)} Cash`
+      : "a guaranteed Cash reward";
+  const rewardGuideSlides = [
+    {
+      icon: "🏆",
+      target: "wheel",
+      title: "First win unlocked!",
+      body: `Because you are new, your first spin starts you with ${starterCashReward}. It is real progress in your EmmyTech Cash Challenge—not points.`,
+      action: "What happens next?",
+    },
+    {
+      icon: "⏱️",
+      target: "progress-cash",
+      title: "Grow it before time runs out",
+      body: `Your 24-hour Cash Challenge has started. Reach ${moneyFmt(cashTarget)} before the timer ends to unlock cash withdrawal.`,
+      action: "How do I grow it?",
+    },
+    {
+      icon: "⚡",
+      target: "progress-daily",
+      title: "More spins, more chances",
+      body: "Use your daily spin and invite valid new players to earn extra spins. Every Cash reward you land on grows your challenge balance.",
+      action: "What if time runs out?",
+    },
+    {
+      icon: "🛟",
+      target: "progress-conversion",
+      title: "Your progress still has value",
+      body: `If time expires below ${moneyFmt(cashConversionFloor)}, your Cash converts 1-for-1 into Cash Off. From ${moneyFmt(cashConversionFloor)} to ${moneyFmt(cashTarget - 1)}, EmmyTech upgrades it to ${moneyFmt(cashTarget)} Cash Off.`,
+      action: "So, what is Cash Off?",
+    },
+    {
+      icon: "🏷️",
+      target: "cashoff-balance",
+      title: "Cash Off means you pay less",
+      body: "Cash Off is shopping credit, not withdrawable money. For example: a ₦150,000 product with ₦5,000 Cash Off costs you ₦145,000.",
+      action: "What else can I win?",
+    },
+    {
+      icon: "💻",
+      target: "wheel",
+      title: "A featured gadget can be yours",
+      body: `This week's featured prize is ${featuredPrizeName}. Land on it and the product is yours—we save it in your Prize Bag so EmmyTech can verify and arrange collection.`,
+      action: "Show me my reward",
+    },
+  ];
+  const activeRewardGuideSlide =
+    rewardGuideSlides[Math.min(rewardGuideStep, rewardGuideSlides.length - 1)];
+  const activeGuideTarget = activeRewardGuideSlide?.target;
+
+  const rewardGuidePreview = showRewardGuide && !player && !timerPreview;
+  const dailyProgressSummary = timerPreview || rewardGuidePreview
+    ? "1 spin ready"
+    : dailyAvailable
+      ? `${Number(player?.spins_remaining || 0)} spin${Number(player?.spins_remaining || 0) === 1 ? "" : "s"} ready`
+      : nextDailyAt
+        ? `Next spin ${dailyCountdown()}`
+        : `${Number(player?.spins_remaining || 0)} spin${Number(player?.spins_remaining || 0) === 1 ? "" : "s"} ready`;
+  const cashProgressSummary = cashChallenge
+    ? cashChallenge.cash_eligible
+      ? "Cash unlocked"
+      : cashChallenge.converted_to_cash_off
+        ? `${moneyFmt(cashChallenge.converted_cash_off_amount)} Cash Off`
+        : `${moneyFmt(cashChallengeBalance)} / ${moneyFmt(cashTarget)}`
+    : "Cash Challenge not started";
+
+  useEffect(() => {
+    if (!showRewardGuide || rewardGuideCollapsed || !activeGuideTarget) return;
+
+    let positionTimer = 0;
+    const positionGuide = () => {
+      const currentTarget =
+        document.querySelector<HTMLElement>(`[data-guide-target="${activeGuideTarget}"]`) ||
+        document.querySelector<HTMLElement>('[data-guide-target="wheel"]');
+      if (!currentTarget) return;
+
+      const targetRect = currentTarget.getBoundingClientRect();
+      const bubbleRect = guideBubbleRef.current?.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const bubbleWidth = bubbleRect?.width || Math.min(390, viewportWidth - 24);
+      const bubbleHeight = bubbleRect?.height || 238;
+      const gap = 18;
+      const clamp = (value: number, min: number, max: number) =>
+        Math.min(Math.max(value, min), Math.max(min, max));
+
+      let top = 12;
+      let left = 12;
+      let placement = "from-left";
+
+      if (viewportWidth <= 720) {
+        const targetCenter = targetRect.top + targetRect.height / 2;
+        const placeAbove = targetCenter > viewportHeight * 0.5;
+        top = placeAbove
+          ? targetRect.top - bubbleHeight - 14
+          : targetRect.bottom + 14;
+        top = clamp(top, 12, viewportHeight - bubbleHeight - 12);
+        left = clamp((viewportWidth - bubbleWidth) / 2, 12, viewportWidth - bubbleWidth - 12);
+        placement = placeAbove ? "from-bottom" : "from-top";
+      } else if (viewportWidth - targetRect.right >= bubbleWidth + gap + 12) {
+        top = clamp(
+          targetRect.top + targetRect.height / 2 - bubbleHeight / 2,
+          12,
+          viewportHeight - bubbleHeight - 12
+        );
+        left = targetRect.right + gap;
+        placement = "from-left";
+      } else if (targetRect.left >= bubbleWidth + gap + 12) {
+        top = clamp(
+          targetRect.top + targetRect.height / 2 - bubbleHeight / 2,
+          12,
+          viewportHeight - bubbleHeight - 12
+        );
+        left = targetRect.left - bubbleWidth - gap;
+        placement = "from-right";
+      } else {
+        const fitsBelow = viewportHeight - targetRect.bottom >= bubbleHeight + gap;
+        top = fitsBelow
+          ? targetRect.bottom + gap
+          : targetRect.top - bubbleHeight - gap;
+        top = clamp(top, 12, viewportHeight - bubbleHeight - 12);
+        left = clamp(
+          targetRect.left + targetRect.width / 2 - bubbleWidth / 2,
+          12,
+          viewportWidth - bubbleWidth - 12
+        );
+        placement = fitsBelow ? "from-top" : "from-bottom";
+      }
+
+      setGuidePosition({ top, left, placement, ready: true });
+    };
+
+    const prepareTimer = window.setTimeout(() => {
+      const requestedTarget = document.querySelector<HTMLElement>(
+        `[data-guide-target="${activeGuideTarget}"]`
+      );
+      const target =
+        requestedTarget || document.querySelector<HTMLElement>('[data-guide-target="wheel"]');
+
+      if (target && activeGuideTarget !== "cashoff-balance") {
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      }
+
+      positionTimer = window.setTimeout(positionGuide, 320);
+      window.addEventListener("resize", positionGuide);
+      window.addEventListener("scroll", positionGuide, true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(prepareTimer);
+      window.clearTimeout(positionTimer);
+      window.removeEventListener("resize", positionGuide);
+      window.removeEventListener("scroll", positionGuide, true);
+    };
+  }, [activeGuideTarget, progressExpanded, rewardGuideCollapsed, showRewardGuide]);
+
+  function guideTargetClass(target: string) {
+    return showRewardGuide && !rewardGuideCollapsed && activeGuideTarget === target
+      ? " cashoff-guide-highlight"
+      : "";
+  }
+
   function buttonLabel() {
-    if (spinning) return "🎡 SPINNING...";
-    if (!player) return "✨ SPIN NOW — IT'S FREE";
-    if (Number(player.spins_remaining || 0) <= 0) return "🚀 GET ANOTHER SPIN";
-    return "✨ SPIN NOW • " + player.spins_remaining + " LEFT";
+    if (spinning) return "Spinning...";
+    if (!player) return "Start my free spin";
+    if (Number(player.spins_remaining || 0) <= 0) return "Earn another spin";
+    return "Spin now · " + player.spins_remaining + " remaining";
   }
 
   function resultIconClass() {
@@ -1283,26 +1591,28 @@ export default function SpinWheelClient() {
   }
 
   return (
-    <div className="cashoff-app-root flex min-h-screen flex-col">
-      <div className={`win-toast ${toast ? "show" : ""}`} aria-live="polite">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-600">
-          <i className="fas fa-gift" />
+    <div className="cashoff-app-root cashoff-v5 flex min-h-screen flex-col">
+      {toast && (
+        <div className="win-toast show" aria-live="polite">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+            <i className="fas fa-gift" />
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-800 leading-none text-slate-900">
+              {toast.name}
+            </p>
+            <p className="text-[10px] font-bold uppercase text-slate-500">
+              {`just won ${toast.prize}`}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="mb-1 text-xs font-800 leading-none text-slate-900">
-            {toast?.name || "..."}
-          </p>
-          <p className="text-[10px] font-bold uppercase text-slate-500">
-            {toast ? `just won ${toast.prize}` : "just won a Prize"}
-          </p>
-        </div>
-      </div>
+      )}
 
       <nav
-        className="sticky top-0 z-50 border-b border-slate-100 bg-white p-4 md:p-6"
+        className="cashoff-topbar"
         aria-label="EmmyTech Spin and Win"
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
+        <div className="cashoff-topbar-inner">
           <div className="brand-logo-wrap">
             <img src={LOGO_URL} alt="Emmy Technology" className="brand-logo-img" />
 
@@ -1324,20 +1634,23 @@ export default function SpinWheelClient() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-5">
-            <div className="cashoff-nav-chip">
-              <span>💸 Cash Off</span>
+          <div className="cashoff-topbar-actions">
+            <div
+              className={`cashoff-nav-chip${guideTargetClass("cashoff-balance")}`}
+              data-guide-target="cashoff-balance"
+            >
+              <span>Cash Off</span>
               <strong>{moneyFmt(cashOffBalance)}</strong>
             </div>
 
             <button
+              type="button"
               onClick={() => setShowBag(true)}
-              className="flex flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-5 py-2 transition-all active:scale-95 hover:bg-blue-100"
+              className="cashoff-prize-chip"
+              aria-label="Open Prize Bag"
             >
-              <span className="block text-[9px] font-bold uppercase tracking-tighter text-blue-400">
-                My Prizes
-              </span>
-              <i className="fas fa-gift text-lg text-blue-600" />
+              <i className="fas fa-gift" />
+              <span>Prize Bag</span>
             </button>
 
             <button
@@ -1356,31 +1669,42 @@ export default function SpinWheelClient() {
       <div className="cashoff-trust-bar" aria-label="Campaign information">
         <div>
           <span className="cashoff-trust-dot" aria-hidden="true" />
-          <span><strong>Free spin</strong> for new players</span>
-          <span aria-hidden="true">•</span>
+          <span><strong>Free to play</strong></span>
+          <span aria-hidden="true">·</span>
           {stats.totalPlayers > 0 ? (
             <span>
-              <strong>{stats.totalPlayers.toLocaleString()}</strong> players registered
+              <strong>{stats.totalPlayers.toLocaleString()}</strong> players joined
             </span>
           ) : (
-            <span><strong>Real prizes</strong> to win</span>
+            <span><strong>Real rewards</strong></span>
           )}
-          <span aria-hidden="true">•</span>
-          <span>Share for <strong>bonus spins</strong></span>
+          <span aria-hidden="true">·</span>
+          <span>Share to <strong>earn spins</strong></span>
         </div>
       </div>
 
-      <main className="flex flex-grow flex-col items-center justify-center px-6 py-10">
+      <main className="cashoff-main">
         <section className="cashoff-hero-shell">
           <div className="cashoff-hero-copy">
             <div className="cashoff-hero-badge">
-              <span className="cashoff-hero-emoji">🎁</span>
-              <span>Free spin • Win real cash</span>
+              <span className="cashoff-hero-emoji" aria-hidden="true">✦</span>
+              <span>EmmyTech Spin &amp; Save</span>
             </div>
 
             <h1>
-              Spin the wheel. <span>Win cash.</span>
+              Spin today. <span>Pay less at EmmyTech.</span>
             </h1>
+
+            <p className="cashoff-hero-description">
+              Win Cash Off shopping credit, bonus spins and real prizes. Your
+              rewards stay linked to you.
+            </p>
+
+            <div className="cashoff-hero-benefits" aria-label="Campaign benefits">
+              <span><i className="fas fa-check" /> No payment required</span>
+              <span><i className="fas fa-check" /> One free spin</span>
+              <span><i className="fas fa-check" /> Rewards saved</span>
+            </div>
           </div>
         </section>
 
@@ -1392,63 +1716,139 @@ export default function SpinWheelClient() {
             <div className="cw-referral-icon" aria-hidden="true">🎉</div>
             <div className="cw-referral-text">
               <strong>{referralHeadline(referrer)}</strong>
-              <span>Spin now to win yours — it&apos;s free</span>
+              <span>Your free spin is ready. No payment needed.</span>
             </div>
           </aside>
         )}
 
-        {player && dailyAvailable && (
-          <aside className="cw-daily-banner" role="status" aria-live="polite">
-            <div className="cw-daily-icon" aria-hidden="true">🎡</div>
-            <div className="cw-daily-text">
-              <strong>Your daily spin is ready!</strong>
-              <span>
-                You have {Number(player.spins_remaining || 0)} spin
-                {Number(player.spins_remaining || 0) === 1 ? "" : "s"} available
-              </span>
-            </div>
-          </aside>
-        )}
+        {(player || timerPreview || showRewardGuide) &&
+          (cashChallenge || dailyAvailable || nextDailyAt || timerPreview || showRewardGuide) && (
+            <section
+              className={`cashoff-progress-card${progressExpanded ? " expanded" : ""}`}
+              aria-label="Your spin and Cash Challenge progress"
+              aria-live="polite"
+            >
+              <button
+                type="button"
+                className="cashoff-progress-toggle"
+                onClick={() => setProgressExpanded((current) => !current)}
+                aria-expanded={progressExpanded}
+                aria-controls="cashoff-progress-details"
+              >
+                <span className="cashoff-progress-summary-icon" aria-hidden="true">
+                  <i className="fas fa-chart-line" />
+                </span>
 
-        {player && !dailyAvailable && nextDailyAt && (
-          <aside className="cw-daily-banner cw-daily-countdown" role="status">
-            <div className="cw-daily-icon" aria-hidden="true">⏰</div>
-            <div className="cw-daily-text">
-              <strong>Next daily spin in {dailyCountdown()}</strong>
-              <span>Earned referral and share spins remain available.</span>
-            </div>
-          </aside>
-        )}
+                <span className="cashoff-progress-summary-copy">
+                  <span className="cashoff-progress-kicker">Your progress</span>
+                  <strong>
+                    <span>{dailyProgressSummary}</span>
+                    <i aria-hidden="true" />
+                    <span>{cashProgressSummary}</span>
+                  </strong>
+                </span>
 
-        {(player || timerPreview) && cashChallenge && (
-          <section className="cash-challenge-strip" aria-label="24-hour withdrawable cash challenge">
-            <div className="cash-challenge-clock" aria-hidden="true">
-              <i className="far fa-clock" />
-            </div>
-            <div className="cash-challenge-time">
-              <span>Withdrawable cash</span>
-              <strong>{cashChallenge.active ? countdownText(cashChallenge.expires_at, clockNow) : "24:00:00"}</strong>
-            </div>
-            <div className="cash-challenge-progress">
-              <span>
-                {cashChallenge.cash_eligible
-                  ? "Ready to withdraw"
-                  : cashChallenge.converted_to_cash_off
-                    ? "Converted to Cash-Off"
-                    : `${moneyFmt(Math.max(0, Number(cashChallenge.cash_target || 1000) - Number(cashChallenge.cash_balance || 0)))} to eligibility`}
-              </span>
-              <div><i style={{ width: `${Math.min(100, Math.round((Number(cashChallenge.cash_balance || 0) / Math.max(1, Number(cashChallenge.cash_target || 1000))) * 100))}%` }} /></div>
-            </div>
-            <div className="cash-challenge-amount">
-              <span>Cash</span>
-              <strong>{moneyFmt(cashChallenge.cash_balance)}</strong>
-              <small>₦700–₦999 converts</small>
-            </div>
-          </section>
-        )}
+                <span className="cashoff-progress-live">
+                  <i aria-hidden="true" /> Live
+                </span>
+
+                <i
+                  className={`fas fa-chevron-down cashoff-progress-chevron${progressExpanded ? " open" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {progressExpanded && (
+                <div id="cashoff-progress-details" className="cashoff-progress-details">
+                  <div className="cashoff-progress-grid">
+                    {((player && (dailyAvailable || nextDailyAt)) || timerPreview || rewardGuidePreview) && (
+                      <article
+                        className={`cashoff-progress-item cashoff-progress-daily${guideTargetClass("progress-daily")}`}
+                        data-guide-target="progress-daily"
+                      >
+                        <div className="cashoff-progress-item-icon" aria-hidden="true">
+                          <i className="fas fa-sync-alt" />
+                        </div>
+                        <div className="cashoff-progress-item-copy">
+                          <span>Daily spin</span>
+                          <strong>
+                            {timerPreview || rewardGuidePreview
+                              ? "1 spin ready"
+                              : dailyAvailable
+                                ? `${Number(player?.spins_remaining || 0)} spin${Number(player?.spins_remaining || 0) === 1 ? "" : "s"} ready`
+                                : `Next free spin in ${dailyCountdown()}`}
+                          </strong>
+                          <small>
+                            {timerPreview || rewardGuidePreview || dailyAvailable
+                              ? "Unused daily spins stay at one. Earned spins can increase your balance."
+                              : `${Number(player?.spins_remaining || 0)} earned spin${Number(player?.spins_remaining || 0) === 1 ? "" : "s"} still available.`}
+                          </small>
+                        </div>
+                      </article>
+                    )}
+
+                    {cashChallenge && (
+                      <article
+                        className={`cashoff-progress-item cashoff-progress-cash${guideTargetClass("progress-cash")}`}
+                        data-guide-target="progress-cash"
+                      >
+                        <div className="cashoff-progress-item-icon" aria-hidden="true">
+                          <i className="fas fa-wallet" />
+                        </div>
+                        <div className="cashoff-progress-item-copy">
+                          <span>24-hour Cash Challenge</span>
+                          <strong>
+                            {cashChallenge.cash_eligible
+                              ? "Cash withdrawal unlocked"
+                              : cashChallenge.converted_to_cash_off
+                                ? `${moneyFmt(cashChallenge.converted_cash_off_amount)} Cash Off saved`
+                                : `${moneyFmt(cashChallengeBalance)} of ${moneyFmt(cashTarget)}`}
+                          </strong>
+
+                          {!cashChallenge.converted_to_cash_off && (
+                            <div
+                              className="cashoff-progress-track"
+                              aria-label={`${cashProgressPercent}% of the Cash target reached`}
+                            >
+                              <i style={{ width: `${cashProgressPercent}%` }} />
+                            </div>
+                          )}
+
+                          <small>
+                            {cashChallenge.cash_eligible
+                              ? "You reached the target. Contact EmmyTech to complete verification."
+                              : cashChallenge.converted_to_cash_off
+                                ? "Cash Off reduces the price of an eligible EmmyTech purchase."
+                                : `${moneyFmt(Math.max(0, cashTarget - cashChallengeBalance))} more to unlock cash · ${countdownText(cashChallenge.expires_at, clockNow)} left`}
+                          </small>
+                        </div>
+                      </article>
+                    )}
+                  </div>
+
+                  {cashChallenge?.active && !cashChallenge.cash_eligible && (
+                    <div
+                      className={`cashoff-progress-conversion${guideTargetClass("progress-conversion")}`}
+                      data-guide-target="progress-conversion"
+                    >
+                      <i className="fas fa-shield-alt" aria-hidden="true" />
+                      <p>
+                        <strong>If the timer ends:</strong> below {moneyFmt(cashConversionFloor)} converts
+                        1-for-1 to Cash Off; {moneyFmt(cashConversionFloor)}–{moneyFmt(cashTarget - 1)}{" "}
+                        is upgraded to {moneyFmt(cashTarget)} Cash Off.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
 
         <div className="wheel-stage w-full max-w-lg text-center">
-          <div className={`wheel-outer mb-12 ${spinning ? "spinning" : ""}`}>
+          <div
+            className={`wheel-outer mb-12 ${spinning ? "spinning" : ""}${guideTargetClass("wheel")}`}
+            data-guide-target="wheel"
+          >
             <div className="pointer-3d">
               <svg width="40" height="50" viewBox="0 0 40 50">
                 <defs>
@@ -1490,6 +1890,10 @@ export default function SpinWheelClient() {
           >
             {buttonLabel()}
           </button>
+
+          <p className="cashoff-spin-note">
+            Free to play. Register once to keep every reward linked to you.
+          </p>
 
           {player && (
             <div className="cashoff-action-panel">
@@ -1592,7 +1996,7 @@ export default function SpinWheelClient() {
             onClick={() => setShowBag(true)}
             className="cashoff-prizes-button"
           >
-            <i className="fas fa-box-open" /> View My Prizes
+            <i className="fas fa-box-open" /> Open Prize Bag
           </button>
         </div>
       </main>
@@ -1616,13 +2020,13 @@ export default function SpinWheelClient() {
 
             <header className="cashoff-modal-header">
               <div className="cashoff-modal-kicker">
-                <span aria-hidden="true">💡</span>
-                <span>Quick guide</span>
+                <span aria-hidden="true">✦</span>
+                <span>Quick reward guide</span>
               </div>
-              <h3 id="cashoff-help-title">How Cash Off works</h3>
+              <h3 id="cashoff-help-title">Cash and Cash Off, made simple</h3>
               <p>
-                Cash Off is EmmyTech shopping credit that helps you pay less
-                whenever you buy or repair with us.
+                They are different rewards. Here is what each one does and how
+                you can use it.
               </p>
             </header>
 
@@ -1631,21 +2035,21 @@ export default function SpinWheelClient() {
                 <article className="cashoff-how-item">
                   <div className="cashoff-how-emoji" aria-hidden="true">🎡</div>
                   <div>
-                    <strong>1. Spin and win</strong>
+                    <strong>1. Spin for free</strong>
                     <p>
-                      Cash rewards won on the wheel are added to your personal
-                      Cash Off balance.
+                      Your first Cash win starts a 24-hour challenge. Extra spins
+                      give you more chances to grow it.
                     </p>
                   </div>
                 </article>
 
                 <article className="cashoff-how-item">
-                  <div className="cashoff-how-emoji" aria-hidden="true">🛒</div>
+                  <div className="cashoff-how-emoji" aria-hidden="true"><i className="fas fa-wallet" /></div>
                   <div>
-                    <strong>2. Buy from EmmyTech</strong>
+                    <strong>2. Cash can be withdrawn</strong>
                     <p>
-                      Pick an eligible item from our ecommerce store, order at
-                      the office, buy an accessory, or bring a device for repair.
+                      Reach {moneyFmt(cashTarget)} before the timer ends to unlock
+                      withdrawal. Otherwise, the progress converts to Cash Off.
                     </p>
                   </div>
                 </article>
@@ -1653,45 +2057,156 @@ export default function SpinWheelClient() {
                 <article className="cashoff-how-item">
                   <div className="cashoff-how-emoji" aria-hidden="true"><i className="fas fa-tag" /></div>
                   <div>
-                    <strong>3. Apply your Cash Off</strong>
+                    <strong>3. Cash Off helps you pay less</strong>
                     <p>
-                      Use part or all of your available balance to reduce the
-                      eligible order amount. Any unused balance remains yours.
-                    </p>
-                  </div>
-                </article>
-
-                <article className="cashoff-how-item">
-                  <div className="cashoff-how-emoji" aria-hidden="true">📱</div>
-                  <div>
-                    <strong>4. Use the same details</strong>
-                    <p>
-                      Use the phone number or email registered on the wheel so
-                      we can find and verify your balance.
+                      It is shopping credit, not withdrawable money. Use it to
+                      reduce an eligible EmmyTech product or service price.
                     </p>
                   </div>
                 </article>
               </div>
 
               <div className="cashoff-help-note">
-                <strong>Important:</strong> Cash Off reduces eligible EmmyTech
-                purchases and services. It is not a withdrawable cash balance.
+                <strong>Featured prize:</strong> {featuredPrizeName} can be won on
+                the wheel. Once won, it is saved in your Prize Bag for collection.
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowHelp(false);
-                  openCashOffViaWhatsApp();
-                }}
-                className="cashoff-modal-primary"
-              >
-                <span aria-hidden="true">🛍️</span>
-                Use My Cash Off
-              </button>
+              <div className="cashoff-help-actions">
+                <button
+                  type="button"
+                  onClick={replayRewardGuide}
+                  className="cashoff-modal-primary"
+                >
+                  <i className="fas fa-play-circle" aria-hidden="true" />
+                  Play the reward guide
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowHelp(false);
+                    openCashOffViaWhatsApp();
+                  }}
+                  className="cashoff-modal-secondary"
+                >
+                  <span aria-hidden="true">🛍️</span>
+                  Use My Cash Off
+                </button>
+              </div>
             </div>
           </section>
         </div>
+      )}
+
+      {showRewardGuide && !rewardGuideCollapsed && activeRewardGuideSlide && (
+        <div className="cashoff-guide-layer" aria-live="polite">
+          <aside
+            ref={guideBubbleRef}
+            className={`cashoff-guide-bubble ${guidePosition.placement}${guidePosition.ready ? " ready" : ""}`}
+            style={{ top: guidePosition.top, left: guidePosition.left }}
+            role="region"
+            aria-labelledby="cashoff-guide-title"
+          >
+            <div className="cashoff-guide-avatar" aria-hidden="true">
+              <i className="fas fa-comment-dots" />
+              <span />
+            </div>
+
+            <div className="cashoff-guide-chat">
+              <header className="cashoff-guide-chat-header">
+                <div>
+                  <strong>EmmyTech Guide</strong>
+                  <span>Step {rewardGuideStep + 1} of {rewardGuideSlides.length}</span>
+                </div>
+
+                <div className="cashoff-guide-chat-tools">
+                  <button
+                    type="button"
+                    onClick={() => setRewardGuideCollapsed(true)}
+                    aria-label="Collapse reward guide"
+                    title="Collapse guide"
+                  >
+                    <i className="fas fa-minus" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => finishRewardGuide("skipped")}
+                    aria-label="Skip reward guide and view result"
+                    title="Skip guide"
+                  >
+                    <i className="fas fa-times" />
+                  </button>
+                </div>
+              </header>
+
+              <div className="cashoff-guide-stage">
+                <div className="cashoff-guide-message-icon" aria-hidden="true">
+                  {activeRewardGuideSlide.icon}
+                </div>
+                <div>
+                  <p className="cashoff-guide-unlocked">
+                    {rewardGuideStep === 0 ? "New player bonus" : "Look here"}
+                  </p>
+                  <h2 id="cashoff-guide-title">{activeRewardGuideSlide.title}</h2>
+                </div>
+              </div>
+
+              <p className="cashoff-guide-copy">{activeRewardGuideSlide.body}</p>
+
+              <footer className="cashoff-guide-actions">
+                <div
+                  className="cashoff-guide-dots"
+                  aria-label={`Step ${rewardGuideStep + 1} of ${rewardGuideSlides.length}`}
+                >
+                  {rewardGuideSlides.map((slide, index) => (
+                    <span
+                      key={slide.title}
+                      className={index === rewardGuideStep ? "active" : index < rewardGuideStep ? "complete" : ""}
+                    />
+                  ))}
+                </div>
+
+                <div className="cashoff-guide-navigation">
+                  {rewardGuideStep > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const previousStep = Math.max(0, rewardGuideStep - 1);
+                        if (previousStep >= 1 && previousStep <= 3) setProgressExpanded(true);
+                        setRewardGuideStep(previousStep);
+                      }}
+                      className="cashoff-guide-back"
+                      aria-label="Previous reward guide step"
+                    >
+                      <i className="fas fa-arrow-left" aria-hidden="true" />
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={advanceRewardGuide}
+                    className="cashoff-guide-next"
+                  >
+                    <span>{activeRewardGuideSlide.action}</span>
+                    <i className="fas fa-arrow-right" aria-hidden="true" />
+                  </button>
+                </div>
+              </footer>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {showRewardGuide && rewardGuideCollapsed && (
+        <button
+          type="button"
+          className="cashoff-guide-resume"
+          onClick={() => setRewardGuideCollapsed(false)}
+        >
+          <span aria-hidden="true"><i className="fas fa-comment-dots" /></span>
+          Continue reward guide
+          <i className="fas fa-chevron-up" aria-hidden="true" />
+        </button>
       )}
 
       {showRegister && (
@@ -1727,14 +2242,14 @@ export default function SpinWheelClient() {
                 {guestResult ? (
                   <>You won <span>{cleanDisplayText(guestResult.label)}</span></>
                 ) : (
-                  <>One step to <span>Spin & Save</span></>
+                  <>Save your details. <span>Keep every reward.</span></>
                 )}
               </h3>
 
               <p>
                 {guestResult
-                  ? "Enter your correct details to link this result to you and continue to your claim options."
-                  : "Enter your correct details so every Cash Off reward stays linked to you and can be used on eligible EmmyTech orders."}
+                  ? "Add your details to save this result and open your claim options."
+                  : "We use these details to save your prizes and find your Cash Off balance when you shop."}
               </p>
             </header>
 
@@ -1831,11 +2346,11 @@ export default function SpinWheelClient() {
                 {registering ? (
                   <>
                     <div className="loader-ring" />
-                    <span>Setting up your spin...</span>
+                    <span>Saving your details...</span>
                   </>
                 ) : (
                   <>
-                    <span>{guestResult ? "Link and claim my result" : "Unlock my free spin"}</span>
+                    <span>{guestResult ? "Save and view my reward" : "Continue to my free spin"}</span>
                     <i className="fas fa-arrow-right" />
                   </>
                 )}
@@ -1901,7 +2416,7 @@ export default function SpinWheelClient() {
                 {lastResult.result_type === "retry"
                   ? "So close"
                   : lastResult.result_type === "cash"
-                    ? "Cash Off unlocked"
+                    ? "Cash Challenge progress"
                     : lastResult.result_type === "bonus_spin"
                       ? "Extra chance unlocked"
                       : lastResult.result_type === "letter"
@@ -1917,12 +2432,14 @@ export default function SpinWheelClient() {
                 {lastResult.result_type === "retry"
                   ? "This spin did not unlock a reward, but you can share your link and earn another chance."
                   : lastResult.result_type === "cash"
-                    ? "Your reward is now Cash Off you can use to reduce the price of an eligible EmmyTech order."
+                    ? `Your ${cleanDisplayText(lastResult.label)} Cash reward is now growing inside your 24-hour Cash Challenge.`
                     : lastResult.result_type === "bonus_spin"
                       ? "A bonus spin has been added. Return to the wheel and try again."
                       : lastResult.result_type === "letter"
                         ? "Your new letter group has been added to the EMMYTECHNOLOGY challenge."
-                        : "Your reward has been safely added to your EmmyTech prize bag."}
+                    : lastResult.result_type === "prize"
+                      ? `${cleanDisplayText(lastResult.label)} is yours. It has been saved in your Prize Bag for verification and collection.`
+                      : "Your reward has been safely added to your EmmyTech Prize Bag."}
               </p>
             </header>
 
@@ -1934,8 +2451,8 @@ export default function SpinWheelClient() {
                 </div>
                 <div className="cashoff-result-balance-divider" />
                 <div>
-                  <span>Available Cash Off</span>
-                  <strong>{moneyFmt(cashOffBalance)}</strong>
+                  <span>Cash Challenge</span>
+                  <strong>{moneyFmt(cashChallengeBalance)} / {moneyFmt(cashTarget)}</strong>
                 </div>
               </div>
             )}
@@ -1977,8 +2494,8 @@ export default function SpinWheelClient() {
 
             <div className="cashoff-result-actions">
               <p className="cashoff-result-share-note">
-                Share to your WhatsApp Status for one instant bonus spin. You
-                can also earn another spin when a valid referral completes theirs.
+                Share this result to earn one bonus spin. A valid friend referral
+                can earn you another.
               </p>
 
               <button
@@ -1993,10 +2510,10 @@ export default function SpinWheelClient() {
                 <i className="fab fa-whatsapp" />
                 <span>
                   {shareBonusClaimedFor === lastResult.spin_log_id
-                    ? "Bonus claimed!"
-                    : claimingShareBonus
-                      ? "Adding your bonus..."
-                      : "Share to Status & get +1 spin"}
+                      ? "Bonus claimed!"
+                      : claimingShareBonus
+                        ? "Adding your bonus..."
+                      : "Share and earn +1 spin"}
                 </span>
               </button>
 
@@ -2009,8 +2526,10 @@ export default function SpinWheelClient() {
                   <i className="fab fa-whatsapp" />
                   <span>
                     {lastResult.result_type === "cash"
-                      ? `Message EmmyTech to claim ${moneyFmt(lastResult.cash_amount)}`
-                      : "Message EmmyTech to claim my reward"}
+                      ? cashChallenge?.cash_eligible
+                        ? "Verify my cash withdrawal"
+                        : "Ask about my Cash Challenge"
+                      : "Message EmmyTech about my reward"}
                   </span>
                 </button>
               )}
@@ -2051,7 +2570,7 @@ export default function SpinWheelClient() {
               <i className="fas fa-shield-alt" />
               <p>
                 {lastResult.result_type === "cash"
-                  ? "Cash Off is shopping credit. It reduces eligible order prices and cannot be withdrawn as cash."
+                  ? `Cash is challenge progress. Reach ${moneyFmt(cashTarget)} before the timer ends to unlock withdrawal; otherwise it converts to Cash Off.`
                   : "Your reward is linked to the phone number and email used for this spin."}
               </p>
             </footer>
@@ -2084,15 +2603,15 @@ export default function SpinWheelClient() {
 
             <div className="cashoff-no-spins-kicker">
               <i className="fas fa-bolt" />
-              <span>Your next chance is close</span>
+              <span>Keep playing</span>
             </div>
 
-            <h3 id="cashoff-no-spins-title">No Spins Left</h3>
+            <h3 id="cashoff-no-spins-title">No spins available</h3>
 
             <p className="cashoff-no-spins-copy">
-              Share your personal link with one friend. When the friend registers
-              and completes a valid first spin, your extra spin is added
-              automatically.
+              {nextDailyAt ? `Your next daily spin is ready in ${dailyCountdown()}. ` : ""}
+              Share your personal link now. When a new friend registers and
+              completes a valid first spin, your extra spin is added automatically.
             </p>
 
             <div className="cashoff-no-spins-give-get">
@@ -2123,7 +2642,7 @@ export default function SpinWheelClient() {
               className="cashoff-no-spins-primary"
             >
               <i className="fas fa-share-alt" />
-              <span>Share My Link</span>
+              <span>Share to earn a spin</span>
             </button>
 
             <button
@@ -2164,10 +2683,10 @@ export default function SpinWheelClient() {
                 <span aria-hidden="true">🚀</span>
                 <span>Share and earn</span>
               </div>
-              <h3 id="cashoff-share-title">One valid friend gives you one spin</h3>
+              <h3 id="cashoff-share-title">Share once. Earn another spin.</h3>
               <p>
-                Share your personal link. Your friend gets a free spin, and you
-                receive an extra spin after a valid registration and spin.
+                Your friend gets a free spin. You receive one extra spin after a
+                valid registration and first spin.
               </p>
             </header>
 
