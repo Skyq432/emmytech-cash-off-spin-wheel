@@ -499,7 +499,9 @@ export default function Emmy40Client() {
       >
         <div className="e40-brand">
           <div className="e40-brand-row">
-            <div className="e40-brand-mark" aria-hidden="true">E</div>
+            <div className="e40-brand-mark" aria-hidden="true">
+              <img src="/emmytech-mark.png" alt="" />
+            </div>
             <div className="e40-brand-copy">
               <strong>
                 EMMY<span>TECH</span>
@@ -540,7 +542,9 @@ export default function Emmy40Client() {
 
         <div className="e40-sidebar-footer">
           <div className="e40-sidebar-user" aria-label="Signed in admin">
-            <div className="e40-sidebar-avatar">E</div>
+            <div className="e40-sidebar-avatar" aria-hidden="true">
+              <img src="/emmytech-mark.png" alt="" />
+            </div>
             <div>
               <strong>{username}</strong>
               <span>Admin</span>

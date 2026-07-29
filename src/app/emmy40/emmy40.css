@@ -1,6 +1,6 @@
 :root {
-  --e40-blue: #032489;
-  --e40-blue-dark: #021a63;
+  --e40-blue: #003399;
+  --e40-blue-dark: #002266;
   --e40-blue-soft: #eef3ff;
   --e40-gold: #ffb100;
   --e40-green: #0f9f6e;
@@ -16,7 +16,7 @@
   --e40-line-strong: #d7dde7;
   --e40-surface: #ffffff;
   --e40-bg: #f5f7fa;
-  --e40-sidebar: #061a4b;
+  --e40-sidebar: #002266;
   --e40-shadow: 0 12px 34px rgba(23, 32, 51, 0.07);
   --e40-shadow-soft: 0 5px 18px rgba(23, 32, 51, 0.045);
   --e40-radius: 14px;
@@ -81,7 +81,7 @@
   place-items: center;
   padding: 28px;
   background:
-    radial-gradient(circle at 15% 10%, rgba(3, 36, 137, 0.08), transparent 30%),
+    radial-gradient(circle at 15% 10%, rgba(0, 51, 153, 0.08), transparent 30%),
     var(--e40-bg);
   color: var(--e40-ink);
 }
@@ -177,8 +177,8 @@
 .e40-filter-card input:focus,
 .e40-settings-row select:focus,
 .e40-user-actions input:focus {
-  border-color: rgba(3, 36, 137, 0.55);
-  box-shadow: 0 0 0 3px rgba(3, 36, 137, 0.09);
+  border-color: rgba(0, 51, 153, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 51, 153, 0.09);
 }
 
 .e40-login-card form > button,
@@ -233,7 +233,7 @@
   min-height: 100svh;
   display: flex;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 22%),
+    radial-gradient(circle at top left, rgba(0, 51, 153, 0.08), transparent 22%),
     linear-gradient(180deg, #f6f8fc 0%, #f1f5fb 100%);
   color: var(--e40-ink);
 }
@@ -249,7 +249,7 @@
   padding: 18px 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 28px;
-  background: linear-gradient(180deg, #062766 0%, #041e53 100%);
+  background: linear-gradient(180deg, #003399 0%, #002266 100%);
   box-shadow: 0 24px 56px rgba(5, 18, 45, 0.28);
   color: rgba(255, 255, 255, 0.94);
   transition: width 180ms ease, transform 220ms ease, box-shadow 180ms ease;
@@ -275,13 +275,18 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 15px;
-  background: linear-gradient(135deg, #1f7eff 0%, #2491ff 100%);
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 820;
-  letter-spacing: -0.04em;
-  box-shadow: 0 12px 24px rgba(37, 126, 255, 0.24);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 22px rgba(0, 34, 102, 0.22);
+}
+
+.e40-brand-mark img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: contain;
 }
 
 .e40-brand-copy {
@@ -349,33 +354,6 @@
   box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18);
 }
 
-.e40-sidebar-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 4px;
-  padding: 0 14px;
-  min-height: 44px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.e40-sidebar-search span {
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 15px;
-}
-
-.e40-sidebar-search input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  padding: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 13px;
-  pointer-events: none;
-}
 
 .e40-nav {
   display: grid;
@@ -383,7 +361,7 @@
   padding: 8px 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(78, 121, 203, 0.65) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
 }
 
 .e40-nav::-webkit-scrollbar {
@@ -396,7 +374,7 @@
 
 .e40-nav::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(78, 121, 203, 0.6);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 .e40-nav-divider {
@@ -427,9 +405,9 @@
 }
 
 .e40-sidebar nav button.active {
-  background: linear-gradient(135deg, #1581ff 0%, #238dff 100%);
+  background: linear-gradient(135deg, #1a4db3 0%, #003399 100%);
   color: #ffffff;
-  box-shadow: 0 10px 24px rgba(37, 126, 255, 0.28);
+  box-shadow: 0 10px 24px rgba(0, 34, 102, 0.28);
 }
 
 .e40-nav-icon {
@@ -470,11 +448,16 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+  overflow: hidden;
   border-radius: 999px;
   background: #ffffff;
-  color: #0d2a68;
-  font-size: 14px;
-  font-weight: 800;
+}
+
+.e40-sidebar-avatar img {
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
 }
 
 .e40-sidebar-user strong {
@@ -769,7 +752,7 @@
 }
 
 .e40-help-button:hover {
-  border-color: rgba(3, 36, 137, 0.45);
+  border-color: rgba(0, 51, 153, 0.45);
   background: var(--e40-blue-soft);
 }
 
@@ -1549,7 +1532,7 @@
 }
 
 .e40-prize-card.on-wheel {
-  border-color: rgba(3, 36, 137, 0.3);
+  border-color: rgba(0, 51, 153, 0.3);
 }
 
 .e40-prize-card.inactive {
@@ -1703,7 +1686,7 @@
 }
 
 .e40-rule-groups > button.active {
-  border-color: rgba(3, 36, 137, 0.48);
+  border-color: rgba(0, 51, 153, 0.48);
   background: var(--e40-blue-soft);
   box-shadow: inset 3px 0 0 var(--e40-blue);
 }
