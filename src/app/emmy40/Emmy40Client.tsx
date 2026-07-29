@@ -3,6 +3,9 @@
 import { Fragment, FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AdminHelpProvider, HelpButton, type HelpKey } from "./AdminHelp";
 
+const EMMYTECH_LOGO_URL =
+  "https://ouvdainkxpaegczdinlp.supabase.co/storage/v1/object/public/assest/emmytech%20logo%202.png";
+
 type Tab =
   | "overview"
   | "operations"
@@ -500,7 +503,7 @@ export default function Emmy40Client() {
         <div className="e40-brand">
           <div className="e40-brand-row">
             <div className="e40-brand-mark" aria-hidden="true">
-              <img src="/emmytech-mark.png" alt="" />
+              <img src={EMMYTECH_LOGO_URL} alt="" />
             </div>
             <div className="e40-brand-copy">
               <strong>
@@ -543,7 +546,7 @@ export default function Emmy40Client() {
         <div className="e40-sidebar-footer">
           <div className="e40-sidebar-user" aria-label="Signed in admin">
             <div className="e40-sidebar-avatar" aria-hidden="true">
-              <img src="/emmytech-mark.png" alt="" />
+              <img src={EMMYTECH_LOGO_URL} alt="" />
             </div>
             <div>
               <strong>{username}</strong>
