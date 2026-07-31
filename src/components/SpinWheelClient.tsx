@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 const LOGO_URL =
   "https://ouvdainkxpaegczdinlp.supabase.co/storage/v1/object/public/assest/emmytech%20logo%202.png";
 
+const AMBASSADOR_STORAGE_KEY = "emmy_ambassador_ref";
+const AMBASSADOR_CODE_PATTERN = /^[a-z0-9_-]{3,40}$/i;
+
 const SEGMENT_COLORS = [
   { fill: "#003399", text: "#ffffff", accent: "#1a5cff" },
   { fill: "#fbb03b", text: "#1a0e00", accent: "#ffd06b" },
@@ -318,6 +321,7 @@ export default function SpinWheelClient() {
   async function init() {
     const urlParams = new URLSearchParams(window.location.search);
     const refCode = urlParams.get("ref");
+    const ambassadorCodeFromUrl = urlParams.get("amb")?.trim() || null;
     const handoffToken = urlParams.get("handoff");
     const preview = urlParams.get("preview");
 
@@ -335,6 +339,26 @@ export default function SpinWheelClient() {
       void loadReferrer(activeRefCode);
     }
 
+    if (
+      ambassadorCodeFromUrl &&
+      AMBASSADOR_CODE_PATTERN.test(ambassadorCodeFromUrl) &&
+      !localStorage.getItem(AMBASSADOR_STORAGE_KEY)
+    ) {
+      localStorage.setItem(AMBASSADOR_STORAGE_KEY, ambassadorCodeFromUrl);
+    }
+
+    const storedAmbassadorCode = localStorage
+      .getItem(AMBASSADOR_STORAGE_KEY)
+      ?.trim();
+    const activeAmbassadorCode =
+      storedAmbassadorCode && AMBASSADOR_CODE_PATTERN.test(storedAmbassadorCode)
+        ? storedAmbassadorCode
+        : null;
+
+    if (activeAmbassadorCode) {
+      void recordAmbassadorOpen(activeAmbassadorCode);
+    }
+
     void loadBootstrap();
     void loadStats();
 
@@ -347,6 +371,33 @@ export default function SpinWheelClient() {
       console.error("Player restore error:", error);
     } finally {
       setPlayerRestoreComplete(true);
+    }
+  }
+
+  async function recordAmbassadorOpen(ambassadorCode: string) {
+    if (!AMBASSADOR_CODE_PATTERN.test(ambassadorCode)) return;
+
+    const visitorId = getOrCreateVisitorId();
+    const sessionKey = `emmy_ambassador_spin_open:${visitorId}:${ambassadorCode.toLowerCase()}`;
+
+    if (sessionStorage.getItem(sessionKey)) return;
+
+    try {
+      const response = await fetch("/api/spin/ambassador-open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: ambassadorCode,
+          visitorId,
+        }),
+      });
+      const data = await response.json();
+
+      if (data.ok) {
+        sessionStorage.setItem(sessionKey, "1");
+      }
+    } catch {
+      // Attribution tracking must never block the Spin Wheel experience.
     }
   }
 
@@ -864,6 +915,16 @@ export default function SpinWheelClient() {
       const referralCode =
         new URLSearchParams(window.location.search).get("ref") ||
         localStorage.getItem("emmy_ref");
+      const storedAmbassadorCode = localStorage
+        .getItem(AMBASSADOR_STORAGE_KEY)
+        ?.trim();
+      const ambassadorCode =
+        storedAmbassadorCode && AMBASSADOR_CODE_PATTERN.test(storedAmbassadorCode)
+          ? storedAmbassadorCode
+          : null;
+      const attributionVisitorId = ambassadorCode
+        ? getOrCreateVisitorId()
+        : null;
       const visitorId = guestResult ? getOrCreateVisitorId() : null;
       const wheelSessionToken = guestResult
         ? localStorage.getItem("emmy_wheel_session_token")
@@ -878,6 +939,8 @@ export default function SpinWheelClient() {
           referralCode,
           visitorId,
           wheelSessionToken,
+          ambassadorCode,
+          attributionVisitorId,
         }),
       });
 

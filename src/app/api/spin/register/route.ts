@@ -2,6 +2,74 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { cleanEmail, makeReferralCode, normalizePhone } from "@/lib/spin-utils";
 
+const AMBASSADOR_CODE_PATTERN = /^[a-z0-9_-]{3,40}$/i;
+const VISITOR_ID_PATTERN = /^[a-z0-9:_-]{8,200}$/i;
+
+type AttributionPlayer = {
+  id?: string | null;
+  identity_id?: string | null;
+  full_name?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+};
+
+async function qualifyAmbassadorLead({
+  ambassadorCode,
+  visitorId,
+  player,
+  fallbackName,
+  fallbackPhone,
+  fallbackEmail,
+}: {
+  ambassadorCode: string | null;
+  visitorId: string | null;
+  player: AttributionPlayer | null | undefined;
+  fallbackName: string;
+  fallbackPhone: string | null;
+  fallbackEmail: string | null;
+}) {
+  if (
+    !ambassadorCode ||
+    !visitorId ||
+    !AMBASSADOR_CODE_PATTERN.test(ambassadorCode) ||
+    !VISITOR_ID_PATTERN.test(visitorId) ||
+    !player?.id
+  ) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.rpc(
+      "qualify_ambassador_spin_lead",
+      {
+        p_visitor_id: visitorId,
+        p_referral_code: ambassadorCode,
+        p_identity_id: player.identity_id || null,
+        p_spin_player_id: player.id,
+        p_full_name: player.full_name || fallbackName,
+        p_phone: player.phone_number || fallbackPhone,
+        p_email: player.email || fallbackEmail,
+      }
+    );
+
+    if (error) {
+      console.error("Ambassador Spin attribution RPC failed:", error.message);
+      return { ok: false, error: error.message };
+    }
+
+    return data || null;
+  } catch (error) {
+    console.error("Ambassador Spin attribution failed:", error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to qualify Ambassador Spin lead.",
+    };
+  }
+}
+
 async function findOrCreateIdentity({
   fullName,
   phone,
@@ -71,6 +139,20 @@ export async function POST(req: NextRequest) {
     const referralCodeUsed = body.referralCode
       ? String(body.referralCode).trim()
       : null;
+    const rawAmbassadorCode = body.ambassadorCode
+      ? String(body.ambassadorCode).trim()
+      : null;
+    const rawAttributionVisitorId = body.attributionVisitorId
+      ? String(body.attributionVisitorId).trim()
+      : null;
+    const ambassadorCode =
+      rawAmbassadorCode && AMBASSADOR_CODE_PATTERN.test(rawAmbassadorCode)
+        ? rawAmbassadorCode
+        : null;
+    const attributionVisitorId =
+      rawAttributionVisitorId && VISITOR_ID_PATTERN.test(rawAttributionVisitorId)
+        ? rawAttributionVisitorId
+        : null;
 
     if (!fullName || !phone || !email) {
       return NextResponse.json(
@@ -115,10 +197,20 @@ export async function POST(req: NextRequest) {
 
         if (claimError) throw new Error(claimError.message);
 
+        const ambassadorAttribution = await qualifyAmbassadorLead({
+          ambassadorCode,
+          visitorId: attributionVisitorId,
+          player: claim.spin_player,
+          fallbackName: fullName,
+          fallbackPhone: normalizedPhone,
+          fallbackEmail: cleanedEmail,
+        });
+
         return NextResponse.json({
           ok: true,
           spinPlayer: claim.spin_player,
           wheelSessionToken: claim.wheel_session_token,
+          ambassadorAttribution,
           message: "Guest reward linked to the registered player.",
         });
       }
@@ -147,10 +239,20 @@ export async function POST(req: NextRequest) {
 
       if (playerError) throw new Error(playerError.message);
 
+      const ambassadorAttribution = await qualifyAmbassadorLead({
+        ambassadorCode,
+        visitorId: attributionVisitorId,
+        player: spinPlayer,
+        fallbackName: fullName,
+        fallbackPhone: normalizedPhone,
+        fallbackEmail: cleanedEmail,
+      });
+
       return NextResponse.json({
         ok: true,
         spinPlayer,
         wheelSessionToken: canonical.wheel_session_token,
+        ambassadorAttribution,
         message: "Guest reward linked to the registered player.",
       });
     }
@@ -172,9 +274,19 @@ export async function POST(req: NextRequest) {
     if (existingByPhone.error) throw new Error(existingByPhone.error.message);
 
     if (existingByPhone.data) {
+      const ambassadorAttribution = await qualifyAmbassadorLead({
+        ambassadorCode,
+        visitorId: attributionVisitorId,
+        player: existingByPhone.data,
+        fallbackName: fullName,
+        fallbackPhone: normalizedPhone,
+        fallbackEmail: cleanedEmail,
+      });
+
       return NextResponse.json({
         ok: true,
         spinPlayer: existingByPhone.data,
+        ambassadorAttribution,
         message: "Existing spin player loaded.",
       });
     }
@@ -190,9 +302,19 @@ export async function POST(req: NextRequest) {
     if (existingByEmail.error) throw new Error(existingByEmail.error.message);
 
     if (existingByEmail.data) {
+      const ambassadorAttribution = await qualifyAmbassadorLead({
+        ambassadorCode,
+        visitorId: attributionVisitorId,
+        player: existingByEmail.data,
+        fallbackName: fullName,
+        fallbackPhone: normalizedPhone,
+        fallbackEmail: cleanedEmail,
+      });
+
       return NextResponse.json({
         ok: true,
         spinPlayer: existingByEmail.data,
+        ambassadorAttribution,
         message: "Existing spin player loaded.",
       });
     }
@@ -268,9 +390,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const ambassadorAttribution = await qualifyAmbassadorLead({
+      ambassadorCode,
+      visitorId: attributionVisitorId,
+      player: spinPlayer,
+      fallbackName: fullName,
+      fallbackPhone: normalizedPhone,
+      fallbackEmail: cleanedEmail,
+    });
+
     return NextResponse.json({
       ok: true,
       spinPlayer,
+      ambassadorAttribution,
       message: "Spin player registered.",
     });
   } catch (error) {
