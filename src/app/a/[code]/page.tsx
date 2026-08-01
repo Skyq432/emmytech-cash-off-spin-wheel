@@ -4,6 +4,7 @@ import AmbassadorSpinRedirect from "./AmbassadorSpinRedirect";
 
 type PageProps = {
   params: Promise<{ code: string }>;
+  searchParams?: Promise<{ visitor_id?: string | string[] }>;
 };
 
 type AmbassadorPreview = {
@@ -21,6 +22,14 @@ const LOGO_IMAGE =
 function validAmbassadorCode(value: string) {
   const code = decodeURIComponent(value).trim();
   return /^[a-z0-9_-]{3,40}$/i.test(code) ? code : null;
+}
+
+function validVisitorId(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  const visitorId = candidate?.trim();
+  return visitorId && /^[a-z0-9:_-]{8,200}$/i.test(visitorId)
+    ? visitorId.toLowerCase()
+    : null;
 }
 
 async function getAmbassador(
@@ -103,15 +112,23 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function AmbassadorSpinPage({ params }: PageProps) {
+export default async function AmbassadorSpinPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { code: rawCode } = await params;
+  const query: { visitor_id?: string | string[] } = searchParams
+    ? await searchParams
+    : {};
   const code = validAmbassadorCode(rawCode);
+  const suppliedVisitorId = validVisitorId(query.visitor_id);
   const destination = code ? `/?amb=${encodeURIComponent(code)}` : "/";
 
   return (
     <AmbassadorSpinRedirect
       destination={destination}
       ambassadorCode={code}
+      suppliedVisitorId={suppliedVisitorId}
     />
   );
 }

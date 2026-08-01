@@ -9,11 +9,17 @@ const AMBASSADOR_STORAGE_KEY = "emmy_ambassador_ref";
 type AmbassadorSpinRedirectProps = {
   destination: string;
   ambassadorCode: string | null;
+  suppliedVisitorId?: string | null;
 };
 
-function getOrCreateVisitorId() {
+function getOrCreateVisitorId(suppliedVisitorId?: string | null) {
   const saved = window.localStorage.getItem(VISITOR_STORAGE_KEY);
   if (saved) return saved;
+
+  if (suppliedVisitorId) {
+    window.localStorage.setItem(VISITOR_STORAGE_KEY, suppliedVisitorId);
+    return suppliedVisitorId;
+  }
 
   const visitorId = `wheel:${window.crypto.randomUUID()}`;
   window.localStorage.setItem(VISITOR_STORAGE_KEY, visitorId);
@@ -23,12 +29,13 @@ function getOrCreateVisitorId() {
 export default function AmbassadorSpinRedirect({
   destination,
   ambassadorCode,
+  suppliedVisitorId,
 }: AmbassadorSpinRedirectProps) {
   const router = useRouter();
 
   useEffect(() => {
     if (ambassadorCode) {
-      getOrCreateVisitorId();
+      getOrCreateVisitorId(suppliedVisitorId);
 
       // First touch wins. A later Ambassador link cannot overwrite an existing
       // browser attribution; the database applies the same rule.
@@ -38,7 +45,7 @@ export default function AmbassadorSpinRedirect({
     }
 
     router.replace(destination);
-  }, [ambassadorCode, destination, router]);
+  }, [ambassadorCode, destination, router, suppliedVisitorId]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 text-center">

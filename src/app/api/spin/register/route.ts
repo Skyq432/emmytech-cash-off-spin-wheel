@@ -40,7 +40,7 @@ async function qualifyAmbassadorLead({
 
   try {
     const { data, error } = await supabaseAdmin.rpc(
-      "qualify_ambassador_spin_lead",
+      "qualify_ambassador_spin_lead_v3",
       {
         p_visitor_id: visitorId,
         p_referral_code: ambassadorCode,
