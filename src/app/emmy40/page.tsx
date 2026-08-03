@@ -1,18 +1,13 @@
-import type { Metadata } from "next";
-import Emmy40Client from "./Emmy40Client";
-import "./emmy40.css";
-
-export const metadata: Metadata = {
-  title: "EmmyTech Admin | Control Panel",
-  description: "EmmyTech Spin & Save administration panel.",
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function Emmy40Page() {
-  return <Emmy40Client />;
+export default function LegacySpinAdminPage() {
+  const destination =
+    process.env.AMBASSADOR_ADMIN_URL?.trim() ||
+    (process.env.NODE_ENV === "development"
+      ? "http://localhost:3001/admin/spin-wheel"
+      : "https://ambassador.emmytechnology.com/admin/spin-wheel");
+
+  redirect(destination);
 }
