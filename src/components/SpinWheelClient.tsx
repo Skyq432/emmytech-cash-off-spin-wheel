@@ -219,6 +219,7 @@ export default function SpinWheelClient() {
   const [showResult, setShowResult] = useState(false);
   const [showBag, setShowBag] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [rewardHelpEnabled, setRewardHelpEnabled] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showRewardGuide, setShowRewardGuide] = useState(false);
   const [rewardGuideStep, setRewardGuideStep] = useState(0);
@@ -464,9 +465,20 @@ export default function SpinWheelClient() {
         const res = await fetch("/api/spin/bootstrap", { cache: "no-store" });
         const data = await res.json();
 
-        if (data.ok && data.wheelItems?.length) {
-          setWheelItems(data.wheelItems);
-          return;
+        if (data.ok) {
+          const helpEnabled = data.rewardHelpEnabled === true;
+          setRewardHelpEnabled(helpEnabled);
+
+          if (!helpEnabled) {
+            setShowHelp(false);
+            setShowRewardGuide(false);
+            setRewardGuideCollapsed(false);
+          }
+
+          if (data.wheelItems?.length) {
+            setWheelItems(data.wheelItems);
+            return;
+          }
         }
       } catch (error) {
         console.error("Bootstrap error:", error);
@@ -964,8 +976,14 @@ export default function SpinWheelClient() {
 
       if (claimedGuestResult) {
         setLastResult(claimedGuestResult);
-        setRewardGuideStep(0);
-        setShowRewardGuide(true);
+
+        if (rewardHelpEnabled) {
+          setRewardGuideStep(0);
+          setShowRewardGuide(true);
+        } else {
+          setShowResult(true);
+        }
+
         showWinToast(data.spinPlayer.full_name || "You", claimedGuestResult.label);
       }
     } catch (error) {
@@ -1109,7 +1127,7 @@ export default function SpinWheelClient() {
         }));
 
         setLastResult(result);
-        if (isFirstPlayerSpin) {
+        if (isFirstPlayerSpin && rewardHelpEnabled) {
           setRewardGuideStep(0);
           setShowRewardGuide(true);
         } else {
@@ -1442,6 +1460,8 @@ export default function SpinWheelClient() {
   }
 
   function replayRewardGuide() {
+    if (!rewardHelpEnabled) return;
+
     setShowHelp(false);
     setRewardGuideStep(0);
     setRewardGuideCollapsed(false);
@@ -1716,15 +1736,17 @@ export default function SpinWheelClient() {
               <span>Prize Bag</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowHelp(true)}
-              className="cashoff-help-button"
-              aria-label="How Cash Off works"
-              title="How Cash Off works"
-            >
-              ?
-            </button>
+            {rewardHelpEnabled && (
+              <button
+                type="button"
+                onClick={() => setShowHelp(true)}
+                className="cashoff-help-button"
+                aria-label="How Cash Off works"
+                title="How Cash Off works"
+              >
+                ?
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -2064,7 +2086,7 @@ export default function SpinWheelClient() {
         </div>
       </main>
 
-      {showHelp && (
+      {rewardHelpEnabled && showHelp && (
         <div className="cashoff-modal-overlay">
           <section
             className="cashoff-modal-card"
