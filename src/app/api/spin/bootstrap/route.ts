@@ -11,6 +11,24 @@ export async function GET() {
     .eq("is_active", true)
     .order("created_at", { ascending: true });
 
+  const { data: rewardHelpSetting, error: rewardHelpError } =
+    await supabaseAdmin
+      .from("spin_game_settings")
+      .select("setting_value")
+      .eq("setting_key", "reward_help_enabled")
+      .maybeSingle();
+
+  if (rewardHelpError) {
+    console.warn(
+      "Unable to read reward_help_enabled. Reward help will stay disabled:",
+      rewardHelpError.message
+    );
+  }
+
+  const rewardHelpEnabled =
+    rewardHelpSetting?.setting_value === true ||
+    String(rewardHelpSetting?.setting_value ?? "").toLowerCase() === "true";
+
   if (error) {
     return NextResponse.json(
       { ok: false, error: error.message },
@@ -21,6 +39,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     wheelItems: wheelItems || [],
+    rewardHelpEnabled,
     whatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "2348146503700",
   });
 }
