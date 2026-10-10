@@ -185,6 +185,10 @@ export default function SpinWheelClient() {
   const [guestResult, setGuestResult] = useState<SpinResult | null>(null);
   const [shareBonusClaimedFor, setShareBonusClaimedFor] = useState<string | null>(null);
   const [claimingShareBonus, setClaimingShareBonus] = useState(false);
+  // True only for the exact moment a brand-new player finishes registering with zero
+  // spins left — the one-time nudge to message EmmyTech directly for a bonus spin.
+  const [dmBonusOffered, setDmBonusOffered] = useState(false);
+  const [claimingDmBonus, setClaimingDmBonus] = useState(false);
   const [playerRestoreComplete, setPlayerRestoreComplete] = useState(false);
   const [timerPreview, setTimerPreview] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -926,6 +930,11 @@ export default function SpinWheelClient() {
       setGuestResult(null);
       setShowRegister(false);
       setDrawerOpen(false);
+      setDmBonusOffered(
+        Boolean(claimedGuestResult) &&
+          Number(data.spinPlayer.spins_remaining || 0) === 0 &&
+          !data.spinPlayer.dm_bonus_claimed
+      );
       await refreshPlayer(data.spinPlayer.id);
       await refreshDailySpin(data.spinPlayer.id);
 
@@ -1337,6 +1346,56 @@ export default function SpinWheelClient() {
     if (shared) await claimShareBonus();
   }
 
+  // One-time new-player nudge: open WhatsApp with an intro message, then grant the
+  // bonus spin on trust (same pattern as claimShareBonus) once they've been sent there.
+  async function messageEmmyTechForDmBonus() {
+    const spinLogId = lastResult?.spin_log_id;
+    if (!player || !spinLogId || claimingDmBonus) return;
+    if (player.dm_bonus_claimed) return;
+
+    const number = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "2348146503700";
+    const firstName = player.full_name ? player.full_name.split(" ")[0] : "there";
+    const message = `Hi EmmyTech! I'm ${firstName}, I just joined the Spin Wheel and I'm curious how Cash Off works. Also here for my bonus spin!`;
+
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank");
+
+    setClaimingDmBonus(true);
+
+    try {
+      const res = await fetch("/api/spin/dm-bonus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spinPlayerId: player.id,
+          spinLogId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || "Unable to add the bonus spin.");
+      }
+
+      setPlayer((current) =>
+        current
+          ? {
+              ...current,
+              spins_remaining: Number(data.spinsRemaining || 0),
+              dm_bonus_claimed: true,
+            }
+          : current
+      );
+
+      if (data.granted) {
+        showWinToast("Bonus", "+1 spin for messaging us");
+      }
+    } catch (error) {
+      console.error("DM bonus error:", error);
+    } finally {
+      setClaimingDmBonus(false);
+    }
+  }
+
   function dailyCountdown() {
     if (!nextDailyAt) return null;
 
@@ -1667,7 +1726,7 @@ export default function SpinWheelClient() {
             </div>
 
             <h1>
-              Spin today. <span>Pay less at EmmyTech.</span>
+              What Will Your <span>Next Spin Unlock?</span>
             </h1>
 
             <p className="cashoff-hero-description">
@@ -1821,20 +1880,20 @@ export default function SpinWheelClient() {
               <div className="cashoff-action-bar">
                 <button
                   type="button"
+                  onClick={openCashOffViaWhatsApp}
+                  className="cashoff-action-link whatsapp"
+                >
+                  <span className="cashoff-action-emoji" aria-hidden="true">💬</span>
+                  <span>Message EmmyTech</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setDrawerOpen((value) => !value)}
                   className={"cashoff-action-link " + (drawerOpen ? "active" : "")}
                 >
                   <span className="cashoff-action-emoji" aria-hidden="true">💳</span>
                   <span>{drawerOpen ? "Close Account" : "My Cash Off"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openCashOffViaWhatsApp}
-                  className="cashoff-action-link whatsapp"
-                >
-                  <span className="cashoff-action-emoji" aria-hidden="true">🛍️</span>
-                  <span>Use Cash Off</span>
                 </button>
 
                 <button
@@ -2413,6 +2472,30 @@ export default function SpinWheelClient() {
             )}
 
             <div className="cashoff-result-actions">
+              {dmBonusOffered && (
+                <>
+                  <p className="cashoff-result-share-note">
+                    You&apos;re new here — message EmmyTech now and we&apos;ll add one more spin.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => void messageEmmyTechForDmBonus()}
+                    disabled={claimingDmBonus || Boolean(player?.dm_bonus_claimed)}
+                    className="cashoff-result-primary status-bonus"
+                  >
+                    <i className="fab fa-whatsapp" />
+                    <span>
+                      {player?.dm_bonus_claimed
+                        ? "Bonus claimed!"
+                        : claimingDmBonus
+                          ? "Opening WhatsApp..."
+                          : "Message EmmyTech for +1 spin"}
+                    </span>
+                  </button>
+                </>
+              )}
+
               <p className="cashoff-result-share-note">
                 Share this result to earn one bonus spin. A valid friend referral
                 can earn you another.
