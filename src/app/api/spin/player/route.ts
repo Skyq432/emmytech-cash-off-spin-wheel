@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const [prizesResult, cashOffResult, challengeResult] = await Promise.all([
+    const [prizesResult, cashOffResult] = await Promise.all([
       supabaseAdmin
         .from("spin_user_prizes")
         .select("*")
@@ -60,10 +60,6 @@ export async function GET(req: NextRequest) {
         )
         .eq("identity_id", spinPlayer.identity_id)
         .maybeSingle(),
-
-      supabaseAdmin.rpc("process_spin_cash_challenge", {
-        p_spin_player_id: spinPlayer.id,
-      }),
     ]);
 
     if (prizesResult.error) {
@@ -74,10 +70,6 @@ export async function GET(req: NextRequest) {
       throw new Error(cashOffResult.error.message);
     }
 
-    if (challengeResult.error) {
-      throw new Error(challengeResult.error.message);
-    }
-
     const cashOffAccount = cashOffResult.data;
 
     return NextResponse.json({
@@ -86,8 +78,6 @@ export async function GET(req: NextRequest) {
       spinPlayer,
 
       prizes: prizesResult.data || [],
-
-      cashChallenge: challengeResult.data || null,
 
       cashOffAccount: {
         exists: Boolean(cashOffAccount),
